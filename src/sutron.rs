@@ -1,5 +1,7 @@
+//! Utitlies for working with Sutron files, such as log files.
+
 use std::fs::File;
-use std::io::{BufReader, BufRead};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -10,6 +12,7 @@ use {Error, Result};
 /// A Sutron log file.
 ///
 /// By default these files have the name `ssp.txt`, but other names can be used.
+#[derive(Debug)]
 pub struct Log {
     station_name: String,
     records: Vec<Record>,
@@ -41,7 +44,7 @@ impl Log {
         };
         let mut records = Vec::new();
         for line in lines {
-            records.push(try!(Record::from_str(&try!(line))));
+            records.push(try!(try!(line).parse()));
         }
         Ok(Log {
             station_name: station_name,
@@ -79,8 +82,13 @@ impl Log {
 /// A Sutron log record.
 ///
 /// We keep this simple as possible, with a datetime and some text data.
+#[derive(Debug)]
 pub struct Record {
+    /// The date and time that the record was laid down.
     pub datetime: DateTime<UTC>,
+    /// The data in the record, as a string.
+    ///
+    /// I suppose this could be binary data, but for now it's only strings.
     pub data: String,
 }
 
