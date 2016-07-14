@@ -1,6 +1,9 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::Path;
+use std::str::FromStr;
+
+use chrono::{DateTime, TimeZone, UTC};
 
 use {Error, Result};
 
@@ -9,6 +12,7 @@ use {Error, Result};
 /// By default these files have the name `ssp.txt`, but other names can be used.
 pub struct Log {
     station_name: String,
+    records: Vec<Record>,
 }
 
 impl Log {
@@ -35,7 +39,14 @@ impl Log {
         } else {
             return Err(Error::SutronLogTooShort);
         };
-        Ok(Log { station_name: station_name })
+        let mut records = Vec::new();
+        for line in lines {
+            records.push(try!(Record::from_str(&try!(line))));
+        }
+        Ok(Log {
+            station_name: station_name,
+            records: records,
+        })
     }
 
     /// Returns the station name.
@@ -50,15 +61,94 @@ impl Log {
     pub fn station_name(&self) -> &str {
         &self.station_name
     }
+
+    /// Returns the records in this log file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use atlas::sutron::Log;
+    /// let log = Log::from_path("data/ssp.txt").unwrap();
+    /// assert_eq!(49, log.records().len());
+    /// ```
+    pub fn records(&self) -> &Vec<Record> {
+        &self.records
+    }
+}
+
+/// A Sutron log record.
+///
+/// We keep this simple as possible, with a datetime and some text data.
+pub struct Record {
+    pub datetime: DateTime<UTC>,
+    pub data: String,
+}
+
+impl FromStr for Record {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        if s.chars().count() < 20 {
+            return Err(Error::SutronRecordTooShort(s.len()));
+        }
+        let comma = s.chars().skip(19).next().unwrap();
+        if comma != ',' {
+            return Err(Error::SutronRecordMissingComma(comma.to_string()));
+        }
+        let datetime = try!(UTC.datetime_from_str(&s[0..19], "%m/%d/%Y,%H:%M:%S"));
+        let data = s[20..].to_string();
+        Ok(Record {
+            datetime: datetime,
+            data: data,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::str::FromStr;
+
+    use chrono::{TimeZone, UTC};
+
     #[test]
     fn station_name() {
         let logfile = Log::from_path("data/ssp.txt").unwrap();
         assert_eq!("HEL_ATLAS", logfile.station_name());
+    }
+
+    #[test]
+    fn records() {
+        let logfile = Log::from_path("data/ssp.txt").unwrap();
+        assert_eq!(49, logfile.records().len());
+    }
+
+    #[test]
+    fn record_from_string() {
+        let r = Record::from_str("06/11/2015,11:59:13,the data");
+        assert!(r.is_ok());
+        assert_eq!(UTC.ymd(2015, 6, 11).and_hms(11, 59, 13),
+                   r.as_ref().unwrap().datetime);
+        assert_eq!("the data", r.unwrap().data);
+    }
+
+    #[test]
+    fn record_too_short() {
+        let r = Record::from_str("too short");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn not_a_comma() {
+        let r = Record::from_str("06/11/2015,11:59:13~the data");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn empty_record() {
+        let r = Record::from_str("06/11/2015,11:59:13,");
+        assert!(r.is_ok());
+        assert_eq!("", r.unwrap().data);
     }
 }
