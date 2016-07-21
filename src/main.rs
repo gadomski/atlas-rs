@@ -1,6 +1,5 @@
 extern crate atlas;
 extern crate iron;
-extern crate rustc_serialize;
 extern crate sbd;
 
 use std::fmt::Write;

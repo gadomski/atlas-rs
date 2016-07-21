@@ -6,7 +6,6 @@
 
 extern crate chrono;
 extern crate sbd;
-extern crate rustc_serialize;
 
 pub mod heartbeat;
 pub mod sutron;
