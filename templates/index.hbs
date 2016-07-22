@@ -14,8 +14,52 @@
 
 <body>
   <div class="container">
-    <h2>State of charge</h2>
+    <h1>ATLAS status</h1>
+    <p class="lead">
+    Heartbeats are satellite communications from the ATLAS system.
+    We get a new heartbeat (about) every hour.
+    </p>
 
+    <div class="row">
+      <div class="col-xs-12 col-med-4">
+        <dl class="dl-horizontal">
+          <dt>Last heartbeat</dt>
+          <dd>{{last_heartbeat}}<dd>
+
+          <dt>Last scan started</dt>
+          <dd>{{last_scan_start}}<dd>
+
+          <dt>Next scan expected</dt>
+          <dd>{{next_scan_start}}<dd>
+        </dl>
+        <dl class="dl-horizontal">
+          <dt>External temperature</dt>
+          <dd>{{temperature_external}} &deg;C<dd>
+
+          <dt>Temperature in mount</dt>
+          <dd>{{temperature_mount}} &deg;C<dd>
+
+          <dt>Atmospheric pressure</dt>
+          <dd>{{pressure}} mBar<dd>
+
+          <dt>Humidity</dt>
+          <dd>{{humidity}}%<dd>
+        </dl>
+        <dl class="dl-horizontal">
+          <dt>Battery #1</dt>
+          <dd>{{soc1}}%<dd>
+
+          <dt>Battery #2</dt>
+          <dd>{{soc2}}%<dd>
+        </dl>
+      </div>
+
+      <div class="col-xs-12 col-med-8">
+
+      </div>
+    </div>
+
+    <h2>State of charge</h2>
 
     <div class="row">
       <div id="fig-soc" class="col-xs-11">
@@ -24,7 +68,6 @@
 
     <h2>Temperature</h2>
 
-
     <div class="row">
       <div id="fig-temperature" class="col-xs-11">
       </div>
@@ -32,8 +75,8 @@
   </div>
   <script src="https://code.jquery.com/jquery-2.2.4.min.js" integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=" crossorigin="anonymous" type="text/javascript">
 </script><script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous" type="text/javascript">
-</script><script src="//cdnjs.cloudflare.com/ajax/libs/dygraph/1.1.1/dygraph-combined.js" type="text/javascript">
-</script><script src="static/dygraphs-synchronizer.js" type="text/javascript">
+</script><script src="static/dygraph.min.js" type="text/javascript">
+</script><script src="static/dygraph-synchronizer.js" type="text/javascript">
 </script><script src="static/index.js" type="text/javascript">
 </script>
 </body>

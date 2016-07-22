@@ -6,7 +6,9 @@ authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 [dependencies]
 chrono = "0.2"
 iron = "0.3"
+handlebars-iron = "0.15"
 mount = "0.1"
 router = "0.1"
+rustc-serialize = "0.3"
 sbd = "0.1"
 staticfile = "0.2"

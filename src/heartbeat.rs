@@ -4,7 +4,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::result;
 
 use chrono;
-use chrono::{DateTime, TimeZone, UTC};
+use chrono::{DateTime, Duration, TimeZone, Timelike, UTC};
 
 use sbd::mo::Message;
 
@@ -164,6 +164,19 @@ impl From<chrono::ParseError> for ParseHeartbeatError {
     }
 }
 
+/// Calculates the expected start time of the next scan.
+///
+/// Right now we just operate on a 6-hour interval, so this calculates the next time we hit a
+/// 6-hour interval.
+pub fn expected_next_scan_time(datetime: &DateTime<UTC>) -> DateTime<UTC> {
+    let hour = datetime.hour();
+    let last_hour = hour - hour % 6;
+    datetime.with_hour(last_hour)
+        .and_then(|d| d.with_minute(0))
+        .and_then(|d| d.with_second(0))
+        .unwrap() + Duration::hours(6)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,5 +239,17 @@ mod tests {
         let heartbeat = heartbeats.pop().unwrap().unwrap();
         assert_eq!(10.210, heartbeat.temperature_external);
         assert_eq!(-0.340767, heartbeat.dcl4);
+    }
+
+    #[test]
+    fn next_scan_in_an_hour() {
+        assert_eq!(UTC.ymd(2016, 7, 22).and_hms(6, 0, 0),
+                   expected_next_scan_time(&UTC.ymd(2016, 7, 22).and_hms(5, 0, 0)));
+    }
+
+    #[test]
+    fn next_scan_tomorrow() {
+        assert_eq!(UTC.ymd(2016, 7, 22).and_hms(0, 0, 0),
+                   expected_next_scan_time(&UTC.ymd(2016, 7, 21).and_hms(23, 0, 0)));
     }
 }
