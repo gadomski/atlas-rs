@@ -1,6 +1,9 @@
 extern crate atlas;
 extern crate iron;
+extern crate mount;
 extern crate sbd;
+extern crate router;
+extern crate staticfile;
 
 use std::fmt::Write;
 
@@ -11,13 +14,25 @@ use iron::headers::ContentType;
 use iron::mime::{Mime, SubLevel, TopLevel};
 use iron::status;
 
+use mount::Mount;
+
+use router::Router;
+
+use staticfile::Static;
+
 fn main() {
-    Iron::new(heartbeats)
+    let mut router = Router::new();
+    router.get("/", Static::new("html"));
+    router.get("/temperature.csv", temperature);
+    let mut mount = Mount::new();
+    mount.mount("/static/", Static::new("static"));
+    mount.mount("/", router);
+    Iron::new(mount)
         .http("localhost:3000")
         .unwrap();
 }
 
-fn heartbeats(_: &mut Request) -> IronResult<Response> {
+fn temperature(_: &mut Request) -> IronResult<Response> {
     let storage = sbd::storage::FilesystemStorage::open("/Users/gadomski/iridium").unwrap();
     let mut messages: Vec<_> = storage.iter().map(|r| r.unwrap()).collect();
     messages.retain(|m| m.imei() == "300234063909200");
@@ -32,21 +47,13 @@ fn heartbeats(_: &mut Request) -> IronResult<Response> {
     response.headers
         .set(ContentType(Mime(TopLevel::Text, SubLevel::Ext("csv".to_string()), vec![])));
     let mut csv = String::new();
-    writeln!(&mut csv,
-             "datetime,temperature_external,pressure,humidity,scan_start_datetime,\
-              temperature_mount,soc1,soc2")
-        .unwrap();
+    writeln!(&mut csv, "Datetime,External,Mount").unwrap();
     for heartbeat in heartbeats {
         writeln!(&mut csv,
-                 "{},{:.2},{:.2},{:.2},{},{:.2},{:.2},{:.2}",
+                 "{},{:.2},{:.2}",
                  heartbeat.messages.first().unwrap().time_of_session(),
                  heartbeat.temperature_external,
-                 heartbeat.pressure,
-                 heartbeat.humidity,
-                 heartbeat.scan_start_datetime,
-                 heartbeat.temperature_mount,
-                 heartbeat.soc1,
-                 heartbeat.soc2)
+                 heartbeat.temperature_mount,)
             .unwrap();
     }
     response.body = Some(Box::new(csv));

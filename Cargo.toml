@@ -5,5 +5,8 @@ authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 
 [dependencies]
 chrono = "0.2"
-iron = "0.4"
+iron = "0.3"
+mount = "0.1"
+router = "0.1"
 sbd = "0.1"
+staticfile = "0.2"
