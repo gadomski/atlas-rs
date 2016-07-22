@@ -12,7 +12,7 @@ use {Error, Result};
 
 const HEARTBEAT_FIELD_COUNT: usize = 49;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct Heartbeat {
     pub messages: Vec<Message>,
@@ -93,6 +93,14 @@ impl Heartbeat {
         if d.len() != HEARTBEAT_FIELD_COUNT {
             return Err(ParseHeartbeatError::FieldCount(d.len()));
         }
+        let words = d[11].splitn(2, '/').collect::<Vec<_>>();
+        if words.len() != 2 {
+            return Err(ParseHeartbeatError::DatetimeFormat(d[11].to_string()));
+        }
+        let mut s = String::new();
+        s.push_str(&format!("{:02}/", 1 + try!(words[0].parse::<u32>())));
+        s.push_str(words[1]);
+        let scan_start_datetime = try!(UTC.datetime_from_str(&s, "%m/%d/%y %H:%M:%S"));
         Ok(Heartbeat {
             messages: messages,
             temperature_external: try!(d[1].parse()),
@@ -105,7 +113,7 @@ impl Heartbeat {
             theta_start: try!(d[8].parse()),
             theta_stop: try!(d[9].parse()),
             theta_step: try!(d[10].parse()),
-            scan_start_datetime: try!(UTC.datetime_from_str(d[11], "%m/%d/%y %H:%M:%S")),
+            scan_start_datetime: scan_start_datetime,
             temperature_mount: try!(d[26].parse()),
             solar1: try!(d[27].parse()),
             wind1: try!(d[28].parse()),
@@ -138,6 +146,8 @@ impl Heartbeat {
 pub enum ParseHeartbeatError {
     /// Wrapper around a `chrono::ParseError`.
     ChronoParse(chrono::ParseError),
+    /// Incorrect datetime format caught on our side, not in chrono.
+    DatetimeFormat(String),
     /// The string had an incorrect number of fields.
     FieldCount(usize),
     /// Wrapper around `std::num::ParseFloatError`.
@@ -205,6 +215,8 @@ mod tests {
         assert_eq!(UTC.ymd(2015, 7, 29).and_hms(2, 2, 0),
                    heartbeat.messages[0].time_of_session());
         assert_eq!(6.181, heartbeat.temperature_external);
+        assert_eq!(UTC.ymd(2015, 7, 29).and_hms(0, 2, 7),
+                   heartbeat.scan_start_datetime);
         assert_eq!(-0.344048, heartbeat.dcl4);
     }
 
