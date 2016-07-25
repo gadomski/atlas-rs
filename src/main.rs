@@ -1,4 +1,5 @@
 extern crate atlas;
+extern crate chrono;
 extern crate docopt;
 extern crate handlebars_iron;
 extern crate iron;
@@ -20,6 +21,8 @@ use std::thread;
 
 use atlas::cam;
 use atlas::heartbeat::{Heartbeat, IntoHeartbeats, expected_next_scan_time};
+
+use chrono::UTC;
 
 use docopt::Docopt;
 
@@ -234,6 +237,8 @@ impl Handler for IndexHandler {
                         .to_json());
         data.insert("latest_image_datetime".to_string(),
                     datetime.to_string().to_json());
+        data.insert("now".to_string(),
+                    format!("{}", UTC::now().format("%Y-%m-%d %H:%M:%S UTC")).to_json());
 
         let mut response = Response::new();
         response.set_mut(Template::new("index", data)).set_mut(status::Ok);
