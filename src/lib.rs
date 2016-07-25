@@ -8,6 +8,7 @@ extern crate chrono;
 extern crate sbd;
 
 pub mod heartbeat;
+pub mod cam;
 pub mod sutron;
 
 #[derive(Debug)]

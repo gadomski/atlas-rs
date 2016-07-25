@@ -9,6 +9,7 @@ extern crate router;
 extern crate rustc_serialize;
 extern crate sbd;
 extern crate staticfile;
+extern crate url;
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -17,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
 use std::thread;
 
+use atlas::cam;
 use atlas::heartbeat::{Heartbeat, IntoHeartbeats, expected_next_scan_time};
 
 use docopt::Docopt;
@@ -28,8 +30,6 @@ use iron::Handler;
 use iron::headers::ContentType;
 use iron::mime::{Mime, SubLevel, TopLevel};
 use iron::status;
-use iron::typemap::Key;
-
 use logger::Logger;
 
 use mount::Mount;
@@ -49,20 +49,23 @@ const USAGE: &'static str =
 ATLAS command-line utility.
 
 Usage:
-    atlas serve <addr> <sbd-dir> [--imei=<string>] \
-     [--resource-dir=<dir>]
+    atlas serve <addr> <sbd-dir> <img-dir> \
+     [--imei=<string>] [--resource-dir=<dir>] [--img-url=<url>]
     atlas (-h | --help)
-    atlas --version
+    atlas \
+     --version
 
 Options:
-    -h --help               \
-     Show this screen.
-    --version               Show version.
-    --imei=<string>         Set \
-     the IMEI number of the transmitting SBD unit [default: 300234063909200].
-    \
-     --resource-dir=<dir>   Set the root directory for static web resources, e.g. templates and \
-     javascript files [default: .].
+    -h --help               Show this screen.
+    --version               \
+     Show version.
+    --imei=<string>         The IMEI number of the transmitting SBD unit \
+     [default: 300234063909200].
+    --resource-dir=<dir>   The root directory for static web \
+     resources, e.g. templates and javascript files [default: .].
+     --img-url=<url>        The \
+     url (server + path) that can serve up ATLAS images [default: \
+     http://iridiumcam.lidar.io/ATLAS_CAM].
 ";
 
 #[derive(Debug, RustcDecodable)]
@@ -70,15 +73,10 @@ struct Args {
     cmd_serve: bool,
     arg_addr: String,
     arg_sbd_dir: String,
+    arg_img_dir: String,
     flag_imei: String,
     flag_resource_dir: String,
-}
-
-#[derive(Copy, Clone)]
-struct Heartbeats;
-
-impl Key for Heartbeats {
-    type Value = Vec<Heartbeat>;
+    flag_img_url: String,
 }
 
 fn main() {
@@ -102,7 +100,8 @@ fn main() {
     hbse.reload().unwrap();
 
     let mut router = Router::new();
-    router.get("/", IndexHandler::new(heartbeats.clone()));
+    router.get("/",
+               IndexHandler::new(heartbeats.clone(), &args.arg_img_dir, &args.flag_img_url));
     router.get("/soc.csv",
                CsvHandler::new(heartbeats.clone(),
                                "Battery #1,Battery #2",
@@ -188,11 +187,17 @@ impl HeartbeatWatcher {
 
 struct IndexHandler {
     heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
+    directory: cam::Directory,
+    url: url::Url,
 }
 
 impl IndexHandler {
-    fn new(heartbeats: Arc<RwLock<Vec<Heartbeat>>>) -> IndexHandler {
-        IndexHandler { heartbeats: heartbeats }
+    fn new(heartbeats: Arc<RwLock<Vec<Heartbeat>>>, img_dir: &str, img_url: &str) -> IndexHandler {
+        IndexHandler {
+            heartbeats: heartbeats,
+            directory: cam::Directory::new(img_dir),
+            url: url::Url::parse(img_url).unwrap(),
+        }
     }
 }
 
@@ -219,6 +224,16 @@ impl Handler for IndexHandler {
                     format!("{:.1}", 100.0 * heartbeat.soc1 / 5.0).to_json());
         data.insert("soc2".to_string(),
                     format!("{:.1}", 100.0 * heartbeat.soc2 / 5.0).to_json());
+        let mut url = self.url.clone();
+        let (filename, datetime) = self.directory.latest().unwrap().unwrap();
+        url.path_segments_mut()
+            .unwrap()
+            .push(&filename.to_string_lossy());
+        data.insert("latest_image_url".to_string(),
+                    url.as_str()
+                        .to_json());
+        data.insert("latest_image_datetime".to_string(),
+                    datetime.to_string().to_json());
 
         let mut response = Response::new();
         response.set_mut(Template::new("index", data)).set_mut(status::Ok);
