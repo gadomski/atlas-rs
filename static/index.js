@@ -20,6 +20,7 @@ var soc = new Dygraph(
     "soc.csv", options);
 
 var temperatureOptions = options;
+temperatureOptions.rollPeriod = 24;
 temperatureOptions.axes = {
     y: {
         axisLabelFormatter: function(y) {

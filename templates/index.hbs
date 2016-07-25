@@ -16,7 +16,7 @@
   <div class="container">
     <h1>ATLAS status</h1>
     <p class="lead">
-    Heartbeats are satellite communications from the ATLAS system.
+    &ldquo;Heartbeats&rdquo; are satellite communications from the ATLAS system.
     We get a new heartbeat (about) every hour.
     </p>
 
@@ -59,14 +59,44 @@
       </div>
     </div>
 
-    <h2>State of charge</h2>
+    <h2>Charts</h2>
+
+    <p>
+      These charts are driven by the heartbeat messages, and are updated with each new message.
+      Use the sliders at the bottom of each chart to change the range of dates displayed.
+      The charts are linked, meaning that changes to the date ranges one chart will be propagated to all the charts.
+    </p>
+
+    <p>
+      Each chart also includes a rolling mean feature, which averages out values over a number of hours.
+      The period of the rolling mean is displayed in the bottom left of each chart in a text box, and you can modify this number.
+      Use the rolling mean to smooth out the charts and look for daily (or longer term) trends.
+    </p>
+
+    <p>
+      Between October 2015 and May 2016, the ATLAS system was nonoperational, creating a large data gap for that period.
+    </p>
+
+    <h3>State of charge</h3>
+
+    <p>
+      The &ldquo;state of charge&rdquo; of our battery systems nominally varies between 100% and 0%, but due to the way it is calculated it can drift a bit.
+      In the summer, almost all of our power comes from our large solar panels.
+      In the winter, when the sun barely comes above the horizon, we use methonal fuel cells to power the system.
+    </p>
 
     <div class="row">
       <div id="fig-soc" class="col-xs-11">
       </div>
     </div>
 
-    <h2>Temperature</h2>
+    <h3>Temperature</h3>
+
+    <p>
+      The ATLAS system has two temperature sensors: one external sensor on the southern solar tower, and one inside of the scanner mount.
+      The scanner mount is black, so the temperature inside of hte mount is almost always higher than the atmospheric temperature.
+      On sunny days, the seperation between the two temperatures will be larger, and during extended cloudy periods or during the winter the temperatures will be almost identical.
+    </p>
 
     <div class="row">
       <div id="fig-temperature" class="col-xs-11">
