@@ -17,7 +17,6 @@ use atlas::watch::HeartbeatWatcher;
 use docopt::Docopt;
 use handlebars_iron::{DirectorySource, HandlebarsEngine};
 use iron::prelude::*;
-use logger::Logger;
 use mount::Mount;
 use router::Router;
 use staticfile::Static;
@@ -28,7 +27,7 @@ ATLAS command-line utility.
 
 Usage:
     atlas serve <addr> <sbd-dir> <img-dir> \
-     [--imei=<string>] [--resource-dir=<dir>] [--img-url=<url>]
+     [--imei=<string>] [--resource-dir=<dir>] [--img-url=<url>] [--color-logs]
     atlas (-h | --help)
     atlas \
      --version
@@ -44,6 +43,7 @@ Options:
      --img-url=<url>       The \
      url (server + path) that can serve up ATLAS images [default: \
      http://iridiumcam.lidar.io/ATLAS_CAM].
+     --color-logs          HTTP logs are printed in color.
 ";
 
 #[derive(Debug, RustcDecodable)]
@@ -55,6 +55,7 @@ struct Args {
     flag_imei: String,
     flag_resource_dir: String,
     flag_img_url: String,
+    flag_color_logs: bool,
 }
 
 fn main() {
@@ -100,7 +101,14 @@ fn main() {
     mount.mount("/static/", Static::new(static_path));
     mount.mount("/", router);
 
-    let logger = Logger::new(None);
+    let format = if args.flag_color_logs {
+        None
+    } else {
+        logger::format::Format::new("{method} {uri} -> {status} ({response-time})",
+                                    vec![],
+                                    vec![])
+    };
+    let logger = logger::Logger::new(format);
     let mut chain = Chain::new(mount);
     chain.link_after(hbse);
     chain.link(logger);
