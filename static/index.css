@@ -2,6 +2,16 @@ body {
   margin-bottom: 60px;
 }
 
+.logos-primary img {
+  height: 100px !important;
+  min-height: 100px !important;
+}
+
+.logos-secondary img {
+  height: 50px !important;
+  min-height: 50px !important;
+}
+
 .footer {
   width: 100%;
   background-color: #f5f5f5;
