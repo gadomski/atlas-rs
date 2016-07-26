@@ -24,6 +24,8 @@ pub enum Error {
     Io(std::io::Error),
     /// Wrapper around `atlas::heartbeat::ParseHeartbeatError`.
     ParseHeartbeat(heartbeat::ParseHeartbeatError),
+    /// Wrapper around `notify::Error`.
+    Notify(notify::Error),
     /// Wrapper around `sbd::Error`.
     Sbd(sbd::Error),
     /// The Sutron record was too short -- the length is provided.
@@ -43,6 +45,12 @@ impl From<std::io::Error> for Error {
 impl From<chrono::ParseError> for Error {
     fn from(err: chrono::ParseError) -> Error {
         Error::ChronoParse(err)
+    }
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Error {
+        Error::Notify(err)
     }
 }
 

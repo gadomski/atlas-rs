@@ -9,6 +9,7 @@ use notify::{self, RecommendedWatcher, Watcher};
 
 use sbd::storage::FilesystemStorage;
 
+use Result;
 use heartbeat::{Heartbeat, IntoHeartbeats};
 
 /// Watches a directory and refreshes a vector of heartbeats in a thread-safe way.
@@ -40,10 +41,10 @@ impl HeartbeatWatcher {
     }
 
     /// Enter the infinite watching loop.
-    pub fn watch(&mut self) {
+    pub fn watch(&mut self) -> Result<()> {
         let (tx, rx) = channel();
-        let mut watcher: RecommendedWatcher = Watcher::new(tx).unwrap();
-        watcher.watch(&self.directory).unwrap();
+        let mut watcher: RecommendedWatcher = try!(Watcher::new(tx));
+        try!(watcher.watch(&self.directory));
         loop {
             match rx.recv() {
                 Ok(notify::Event { path: Some(_), op: Ok(_) }) => {

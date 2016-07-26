@@ -122,7 +122,7 @@ fn main() {
     chain.link_after(hbse);
     chain.link(logger);
 
-    thread::spawn(move || watcher.watch());
+    thread::spawn(move || watcher.watch().unwrap());
     Iron::new(chain)
         .http(args.arg_addr.as_str())
         .unwrap();
