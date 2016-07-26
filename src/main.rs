@@ -66,7 +66,7 @@ Options:
      [default: 300234063909200].
     --resource-dir=<dir>   The root directory for static web \
      resources, e.g. templates and javascript files [default: .].
-     --img-url=<url>        The \
+     --img-url=<url>       The \
      url (server + path) that can serve up ATLAS images [default: \
      http://iridiumcam.lidar.io/ATLAS_CAM].
 ";
