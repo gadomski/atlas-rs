@@ -83,7 +83,7 @@ fn main() {
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    let mut watcher = HeartbeatWatcher::new(&args.arg_sbd_dir, &args.flag_imei);
+    let mut watcher = HeartbeatWatcher::new(&args.arg_sbd_dir, &args.flag_imei).unwrap();
 
     let resource_path = PathBuf::from(args.flag_resource_dir);
 

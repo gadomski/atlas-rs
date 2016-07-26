@@ -24,15 +24,15 @@ pub struct HeartbeatWatcher {
 
 impl HeartbeatWatcher {
     /// Creates a new watcher for a given directory and Iridium IMEI number.
-    pub fn new(directory: &str, imei: &str) -> HeartbeatWatcher {
+    pub fn new(directory: &str, imei: &str) -> Result<HeartbeatWatcher> {
         let heartbeats = Vec::new();
         let mut watcher = HeartbeatWatcher {
             directory: directory.to_string(),
             imei: imei.to_string(),
             heartbeats: Arc::new(RwLock::new(heartbeats)),
         };
-        watcher.fill();
-        watcher
+        try!(watcher.fill());
+        Ok(watcher)
     }
 
     /// Gets a new clone of the `Arc<RwLock<>>` around the heartbeats vector.
@@ -48,7 +48,7 @@ impl HeartbeatWatcher {
         loop {
             match rx.recv() {
                 Ok(notify::Event { path: Some(_), op: Ok(_) }) => {
-                    self.fill();
+                    self.fill().unwrap();
                 }
                 // FIXME do better
                 Err(e) => println!("Error yo! {}", e),
@@ -60,8 +60,8 @@ impl HeartbeatWatcher {
         }
     }
 
-    fn fill(&mut self) {
-        let storage = FilesystemStorage::open(&self.directory).unwrap();
+    fn fill(&mut self) -> Result<()> {
+        let storage = try!(FilesystemStorage::open(&self.directory));
         let mut messages: Vec<_> = storage.iter().map(|r| r.unwrap()).collect();
         messages.retain(|m| m.imei() == self.imei);
         messages.sort();
@@ -70,6 +70,7 @@ impl HeartbeatWatcher {
         heartbeats.extend(messages.into_heartbeats()
             .unwrap()
             .into_iter()
-            .filter_map(|h| h.ok()))
+            .filter_map(|h| h.ok()));
+        Ok(())
     }
 }
