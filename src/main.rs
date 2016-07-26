@@ -107,20 +107,18 @@ fn main() {
                IndexHandler::new(heartbeats.clone(), &args.arg_img_dir, &args.flag_img_url));
     router.get("/soc.csv",
                CsvHandler::new(heartbeats.clone(),
-                               "Battery #1,Battery #2",
-                               |mut csv, heartbeat| {
-                                   write!(csv,
-                                          "{:.2},{:.2}",
-                                          100.0 * heartbeat.soc1 / 5.0,
-                                          100.0 * heartbeat.soc2 / 5.0)
+                               &vec!["Battery #1", "Battery #2"],
+                               |heartbeat| {
+                                   vec![format!("{:.2}", 100.0 * heartbeat.soc1 / 5.0),
+                                   format!("{:.2}", 100.0 * heartbeat.soc2 / 5.0),]
                                }));
     router.get("/temperature.csv",
-               CsvHandler::new(heartbeats.clone(), "External,Mount", |mut csv, heartbeat| {
-                   write!(csv,
-                          "{:.2},{:.2}",
-                          heartbeat.temperature_external,
-                          heartbeat.temperature_mount)
-               }));
+               CsvHandler::new(heartbeats.clone(),
+                               &vec!["External", "Mount"],
+                               |heartbeat| {
+                                   vec![format!("{:.2}", heartbeat.temperature_external),
+                                        format!("{:.2}", heartbeat.temperature_mount)]
+                               }));
 
     let mut mount = Mount::new();
     let mut static_path = resource_path.clone();
@@ -247,27 +245,32 @@ impl Handler for IndexHandler {
 }
 
 struct CsvHandler<F>
-    where F: Fn(&mut String, &Heartbeat) -> std::fmt::Result
+    where F: Fn(&Heartbeat) -> Vec<String>
 {
     heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
-    header: String,
+    header: Vec<String>,
     func: F,
 }
 
 impl<F> CsvHandler<F>
-    where F: Fn(&mut String, &Heartbeat) -> std::fmt::Result
+    where F: Fn(&Heartbeat) -> Vec<String>
 {
-    fn new(heartbeats: Arc<RwLock<Vec<Heartbeat>>>, header: &str, func: F) -> CsvHandler<F> {
+    fn new(heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
+           header_extra: &Vec<&str>,
+           func: F)
+           -> CsvHandler<F> {
+        let mut header = vec!["Datetime".to_string()];
+        header.extend(header_extra.iter().map(|s| s.to_string()));
         CsvHandler {
             heartbeats: heartbeats,
-            header: format!("Datetime,{}", header),
+            header: header,
             func: func,
         }
     }
 }
 
 impl<F: 'static> Handler for CsvHandler<F>
-    where F: Send + Sync + Fn(&mut String, &Heartbeat) -> std::fmt::Result
+    where F: Send + Sync + Fn(&Heartbeat) -> Vec<String>
 {
     fn handle(&self, _: &mut Request) -> IronResult<Response> {
         let mut response = Response::new();
@@ -275,7 +278,7 @@ impl<F: 'static> Handler for CsvHandler<F>
         response.headers
             .set(ContentType(Mime(TopLevel::Text, SubLevel::Ext("csv".to_string()), vec![])));
         let mut csv = String::new();
-        writeln!(&mut csv, "{}", self.header).unwrap();
+        writeln!(&mut csv, "{}", self.header.join(",")).unwrap();
 
         let heartbeats = self.heartbeats.read().unwrap();
         for heartbeat in heartbeats.iter() {
@@ -284,8 +287,8 @@ impl<F: 'static> Handler for CsvHandler<F>
                    heartbeat.messages.first().unwrap().time_of_session())
                 .unwrap();
             let ref func = self.func;
-            func(&mut csv, &heartbeat).unwrap();
-            writeln!(&mut csv, "").unwrap();
+            let fields = func(&heartbeat);
+            writeln!(&mut csv, "{}", fields.join(",")).unwrap();
         }
         response.body = Some(Box::new(csv));
         Ok(response)
