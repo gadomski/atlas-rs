@@ -74,7 +74,8 @@ fn main() {
 
     let mut router = Router::new();
     router.get("/",
-               IndexHandler::new(watcher.heartbeats(), &args.arg_img_dir, &args.flag_img_url));
+               IndexHandler::new(watcher.heartbeats(), &args.arg_img_dir, &args.flag_img_url)
+                   .unwrap());
     router.get("/soc.csv",
                CsvHandler::new(watcher.heartbeats(),
                                &vec!["Battery #1", "Battery #2"],

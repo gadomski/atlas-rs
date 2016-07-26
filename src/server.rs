@@ -17,6 +17,7 @@ use rustc_serialize::json::{Json, ToJson};
 
 use url;
 
+use Result;
 use cam;
 use heartbeat::{Heartbeat, expected_next_scan_time};
 
@@ -24,7 +25,7 @@ use heartbeat::{Heartbeat, expected_next_scan_time};
 #[derive(Debug)]
 pub struct IndexHandler {
     heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
-    directory: cam::Directory,
+    img_directory: cam::Directory,
     url: url::Url,
 }
 
@@ -33,22 +34,23 @@ impl IndexHandler {
     pub fn new(heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
                img_dir: &str,
                img_url: &str)
-               -> IndexHandler {
-        IndexHandler {
+               -> Result<IndexHandler> {
+        Ok(IndexHandler {
             heartbeats: heartbeats,
-            directory: cam::Directory::new(img_dir),
-            url: url::Url::parse(img_url).unwrap(),
-        }
+            img_directory: cam::Directory::new(img_dir),
+            url: try!(url::Url::parse(img_url)),
+        })
     }
 }
 
 impl Handler for IndexHandler {
     fn handle(&self, _: &mut Request) -> IronResult<Response> {
         let heartbeats = self.heartbeats.read().unwrap();
-        let heartbeat = heartbeats.last().unwrap();
+        let heartbeat = iexpect!(heartbeats.last(),
+                                 (status::NotFound, "No heartbeats available."));
         let mut data = BTreeMap::<String, Json>::new();
         data.insert("last_heartbeat".to_string(),
-                    heartbeat.messages.first().unwrap().time_of_session().to_string().to_json());
+                    iexpect!(heartbeat.messages.first()).time_of_session().to_string().to_json());
         data.insert("last_scan_start".to_string(),
                     heartbeat.scan_start_datetime.to_string().to_json());
         data.insert("next_scan_start".to_string(),
@@ -66,7 +68,7 @@ impl Handler for IndexHandler {
         data.insert("soc2".to_string(),
                     format!("{:.1}", 100.0 * heartbeat.soc2 / 5.0).to_json());
         let mut url = self.url.clone();
-        let (filename, datetime) = self.directory.latest().unwrap().unwrap();
+        let (filename, datetime) = itry!(self.img_directory.latest()).unwrap();
         url.path_segments_mut()
             .unwrap()
             .push(&filename.to_string_lossy());

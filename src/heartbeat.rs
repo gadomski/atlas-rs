@@ -1,5 +1,7 @@
 //! Heartbeat messages are sent back from the ATLAS system via Iridium DirectIP.
 
+use std::error;
+use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 use std::result;
 
@@ -154,6 +156,30 @@ pub enum ParseHeartbeatError {
     ParseFloat(ParseFloatError),
     /// Wrapper around `std::num::ParseIntError`.
     ParseInt(ParseIntError),
+}
+
+impl error::Error for ParseHeartbeatError {
+    fn description(&self) -> &str {
+        match *self {
+            ParseHeartbeatError::ChronoParse(ref err) => err.description(),
+            ParseHeartbeatError::DatetimeFormat(_) => "the datetime format is incorrect",
+            ParseHeartbeatError::FieldCount(_) => "incorrect number of fields",
+            ParseHeartbeatError::ParseFloat(ref err) => err.description(),
+            ParseHeartbeatError::ParseInt(ref err) => err.description(),
+        }
+    }
+}
+
+impl fmt::Display for ParseHeartbeatError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ParseHeartbeatError::ChronoParse(ref err) => write!(f, "chrono error: {}", err),
+            ParseHeartbeatError::DatetimeFormat(ref s) => write!(f, "incorrect datetime: {}", s),
+            ParseHeartbeatError::FieldCount(n) => write!(f, "incorrect number of fields: {}", n),
+            ParseHeartbeatError::ParseFloat(ref err) => write!(f, "parse float error: {}", err),
+            ParseHeartbeatError::ParseInt(ref err) => write!(f, "parse int error: {}", err),
+        }
+    }
 }
 
 impl From<ParseFloatError> for ParseHeartbeatError {
