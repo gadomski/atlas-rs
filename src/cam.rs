@@ -60,7 +60,7 @@ mod tests {
     fn latest_image() {
         let directory = Directory::new("data");
         let (filename, datetime) = directory.latest().unwrap().unwrap();
-        assert_eq!("ATLAS_CAM_20160725_141500.jpg", filename);
+        assert_eq!("ATLAS_CAM_20160725_141500.jpg", filename.to_string_lossy());
         assert_eq!(UTC.ymd(2016, 7, 25).and_hms(14, 15, 00), datetime);
     }
 
