@@ -5,11 +5,16 @@
         unused_import_braces, unused_qualifications)]
 
 extern crate chrono;
-extern crate sbd;
+extern crate iron;
+extern crate handlebars_iron;
 extern crate notify;
+extern crate rustc_serialize;
+extern crate sbd;
+extern crate url;
 
 pub mod heartbeat;
 pub mod cam;
+pub mod server;
 pub mod sutron;
 pub mod watch;
 
