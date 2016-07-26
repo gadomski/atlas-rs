@@ -47,11 +47,16 @@ impl HeartbeatWatcher {
         try!(watcher.watch(&self.directory));
         loop {
             match rx.recv() {
-                Ok(notify::Event { path: Some(_), op: Ok(_) }) => {
-                    self.fill().unwrap();
+                Ok(notify::Event { path: Some(path), op: Ok(_) }) => {
+                    match self.fill() {
+                        Ok(()) => {
+                            info!("Heartbeats refilled due to activity at {}",
+                                  path.to_string_lossy())
+                        }
+                        Err(err) => error!("Error while refilling heartbeats: {}", err),
+                    }
                 }
-                // FIXME do better
-                Err(e) => println!("Error yo! {}", e),
+                Err(e) => error!("Error while receiving notify message: {}", e),
                 _ => (),
             }
             while let Ok(_) = rx.try_recv() {

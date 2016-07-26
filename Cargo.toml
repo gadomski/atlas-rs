@@ -6,8 +6,10 @@ authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 [dependencies]
 chrono = "0.2"
 docopt = "0.6"
+env_logger = "0.3"
 handlebars-iron = "0.15"
 iron = "0.3"
+log = "0.3"
 logger = "*"
 mount = "0.1"
 notify = "2.6"

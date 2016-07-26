@@ -5,9 +5,11 @@
         unused_import_braces, unused_qualifications)]
 
 extern crate chrono;
+extern crate handlebars_iron;
 #[macro_use]
 extern crate iron;
-extern crate handlebars_iron;
+#[macro_use]
+extern crate log;
 extern crate notify;
 extern crate rustc_serialize;
 extern crate sbd;

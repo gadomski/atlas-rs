@@ -1,5 +1,6 @@
 extern crate atlas;
 extern crate docopt;
+extern crate env_logger;
 extern crate handlebars_iron;
 extern crate iron;
 extern crate logger;
@@ -57,6 +58,8 @@ struct Args {
 }
 
 fn main() {
+    env_logger::init().unwrap();
+
     let args: Args = Docopt::new(USAGE)
         .map(|d| d.version(option_env!("CARGO_PKG_VERSION").map(|s| s.to_string())))
         .and_then(|d| d.decode())
