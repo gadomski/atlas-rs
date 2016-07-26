@@ -68,10 +68,9 @@ impl Handler for IndexHandler {
         data.insert("soc2".to_string(),
                     format!("{:.1}", 100.0 * heartbeat.soc2 / 5.0).to_json());
         let mut url = self.url.clone();
-        let (filename, datetime) = itry!(self.img_directory.latest()).unwrap();
-        url.path_segments_mut()
-            .unwrap()
-            .push(&filename.to_string_lossy());
+        let (filename, datetime) = iexpect!(itry!(self.img_directory.latest()),
+                                            (status::NotFound, "No images available."));
+        iexpect!(url.path_segments_mut().ok()).push(&filename.to_string_lossy());
         data.insert("latest_image_url".to_string(),
                     url.as_str()
                         .to_json());
@@ -129,7 +128,7 @@ impl<F: 'static> Handler for CsvHandler<F>
         for heartbeat in heartbeats.iter() {
             write!(&mut csv,
                    "{},",
-                   heartbeat.messages.first().unwrap().time_of_session())
+                   iexpect!(heartbeat.messages.first()).time_of_session())
                 .unwrap();
             let ref func = self.func;
             let fields = func(&heartbeat);
