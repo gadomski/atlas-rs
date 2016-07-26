@@ -5,10 +5,8 @@ extern crate handlebars_iron;
 extern crate iron;
 extern crate logger;
 extern crate mount;
-extern crate notify;
 extern crate router;
 extern crate rustc_serialize;
-extern crate sbd;
 extern crate staticfile;
 extern crate url;
 
@@ -16,11 +14,11 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::channel;
 use std::thread;
 
 use atlas::cam;
-use atlas::heartbeat::{Heartbeat, IntoHeartbeats, expected_next_scan_time};
+use atlas::heartbeat::{Heartbeat, expected_next_scan_time};
+use atlas::watch::HeartbeatWatcher;
 
 use chrono::UTC;
 
@@ -33,17 +31,14 @@ use iron::Handler;
 use iron::headers::ContentType;
 use iron::mime::{Mime, SubLevel, TopLevel};
 use iron::status;
+
 use logger::Logger;
 
 use mount::Mount;
 
-use notify::{RecommendedWatcher, Watcher};
-
 use router::Router;
 
 use rustc_serialize::json::{Json, ToJson};
-
-use sbd::storage::FilesystemStorage;
 
 use staticfile::Static;
 
@@ -88,11 +83,7 @@ fn main() {
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    let heartbeats = Arc::new(RwLock::new(Vec::new()));
-
-    let mut watcher = HeartbeatWatcher::new(&args.arg_sbd_dir, &args.flag_imei, heartbeats.clone());
-    watcher.fill();
-    thread::spawn(move || watcher.watch());
+    let mut watcher = HeartbeatWatcher::new(&args.arg_sbd_dir, &args.flag_imei);
 
     let resource_path = PathBuf::from(args.flag_resource_dir);
 
@@ -104,16 +95,16 @@ fn main() {
 
     let mut router = Router::new();
     router.get("/",
-               IndexHandler::new(heartbeats.clone(), &args.arg_img_dir, &args.flag_img_url));
+               IndexHandler::new(watcher.heartbeats(), &args.arg_img_dir, &args.flag_img_url));
     router.get("/soc.csv",
-               CsvHandler::new(heartbeats.clone(),
+               CsvHandler::new(watcher.heartbeats(),
                                &vec!["Battery #1", "Battery #2"],
                                |heartbeat| {
                                    vec![format!("{:.2}", 100.0 * heartbeat.soc1 / 5.0),
                                    format!("{:.2}", 100.0 * heartbeat.soc2 / 5.0),]
                                }));
     router.get("/temperature.csv",
-               CsvHandler::new(heartbeats.clone(),
+               CsvHandler::new(watcher.heartbeats(),
                                &vec!["External", "Mount"],
                                |heartbeat| {
                                    vec![format!("{:.2}", heartbeat.temperature_external),
@@ -130,60 +121,11 @@ fn main() {
     let mut chain = Chain::new(mount);
     chain.link_after(hbse);
     chain.link(logger);
+
+    thread::spawn(move || watcher.watch());
     Iron::new(chain)
         .http(args.arg_addr.as_str())
         .unwrap();
-}
-
-struct HeartbeatWatcher {
-    directory: String,
-    imei: String,
-    heartbeats: Arc<RwLock<Vec<Heartbeat>>>,
-}
-
-impl HeartbeatWatcher {
-    fn new(directory: &str,
-           imei: &str,
-           heartbeats: Arc<RwLock<Vec<Heartbeat>>>)
-           -> HeartbeatWatcher {
-        HeartbeatWatcher {
-            directory: directory.to_string(),
-            imei: imei.to_string(),
-            heartbeats: heartbeats,
-        }
-    }
-
-    fn fill(&mut self) {
-        let storage = FilesystemStorage::open(&self.directory).unwrap();
-        let mut messages: Vec<_> = storage.iter().map(|r| r.unwrap()).collect();
-        messages.retain(|m| m.imei() == self.imei);
-        messages.sort();
-        let mut heartbeats = self.heartbeats.write().unwrap();
-        heartbeats.clear();
-        heartbeats.extend(messages.into_heartbeats()
-            .unwrap()
-            .into_iter()
-            .filter_map(|h| h.ok()))
-    }
-
-    fn watch(&mut self) {
-        let (tx, rx) = channel();
-        let mut watcher: RecommendedWatcher = Watcher::new(tx).unwrap();
-        watcher.watch(&self.directory).unwrap();
-        loop {
-            match rx.recv() {
-                Ok(notify::Event { path: Some(_), op: Ok(_) }) => {
-                    println!("Refilling!");
-                    self.fill();
-                }
-                Err(e) => println!("Error yo! {}", e),
-                _ => (),
-            }
-            while let Ok(_) = rx.try_recv() {
-                // pass, clear out the buffer
-            }
-        }
-    }
 }
 
 struct IndexHandler {

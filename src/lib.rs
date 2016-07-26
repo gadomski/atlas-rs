@@ -6,10 +6,12 @@
 
 extern crate chrono;
 extern crate sbd;
+extern crate notify;
 
 pub mod heartbeat;
 pub mod cam;
 pub mod sutron;
+pub mod watch;
 
 #[derive(Debug)]
 /// Our error enum.
