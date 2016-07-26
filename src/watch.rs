@@ -62,13 +62,12 @@ impl HeartbeatWatcher {
 
     fn fill(&mut self) -> Result<()> {
         let storage = try!(FilesystemStorage::open(&self.directory));
-        let mut messages: Vec<_> = storage.iter().map(|r| r.unwrap()).collect();
+        let mut messages: Vec<_> = try!(storage.iter().collect());
         messages.retain(|m| m.imei() == self.imei);
         messages.sort();
         let mut heartbeats = self.heartbeats.write().unwrap();
         heartbeats.clear();
-        heartbeats.extend(messages.into_heartbeats()
-            .unwrap()
+        heartbeats.extend(try!(messages.into_heartbeats())
             .into_iter()
             .filter_map(|h| h.ok()));
         Ok(())
