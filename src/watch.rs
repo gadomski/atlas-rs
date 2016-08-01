@@ -2,6 +2,7 @@
 //!
 //! E.g. watch a directory to trigger a re-read of the heartbeat messages.
 
+use std::io;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
 
@@ -48,19 +49,36 @@ impl HeartbeatWatcher {
         loop {
             match rx.recv() {
                 Ok(notify::Event { path: Some(path), op: Ok(_) }) => {
-                    match self.fill() {
-                        Ok(()) => {
-                            info!("Heartbeats refilled due to activity at {}",
-                                  path.to_string_lossy())
+                    match path.metadata() {
+                        Ok(metadata) => {
+                            if metadata.is_dir() {
+                                try!(watcher.unwatch(&self.directory));
+                                try!(watcher.watch(&self.directory));
+                                info!("Watcher restarted due to activity at {}",
+                                      path.to_string_lossy());
+                            }
+                            match self.fill() {
+                                Ok(()) => {
+                                    info!("Heartbeats refilled due to activity at {}",
+                                          path.to_string_lossy())
+                                }
+                                Err(err) => error!("Error while refilling heartbeats: {}", err),
+                            }
                         }
-                        Err(err) => error!("Error while refilling heartbeats: {}", err),
+                        Err(err) => {
+                            match err.kind() {
+                                io::ErrorKind::NotFound => {}
+                                _ => {
+                                    error!("Error while retrieving path metadata for {}: {}",
+                                           path.to_string_lossy(),
+                                           err)
+                                }
+                            }
+                        }
                     }
                 }
                 Err(e) => error!("Error while receiving notify message: {}", e),
                 _ => (),
-            }
-            while let Ok(_) = rx.try_recv() {
-                // pass, clear out the buffer
             }
         }
     }
