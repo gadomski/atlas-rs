@@ -9,6 +9,7 @@ dependencies = [
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "logger 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "magick_rust 0.5.2 (git+https://github.com/gadomski/magick-rust.git)",
  "mount 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "notify 2.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "router 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -257,6 +258,14 @@ dependencies = [
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "term 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "magick_rust"
+version = "0.5.2"
+source = "git+https://github.com/gadomski/magick-rust.git#a478b1594bf69f7f459b431ad06e80e2b6858326"
+dependencies = [
+ "libc 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -3,6 +3,9 @@ name = "atlas"
 version = "0.1.0"
 authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 
+[features]
+default = ["magick_rust"]
+
 [dependencies]
 chrono = "0.2"
 docopt = "0.6"
@@ -17,6 +20,11 @@ router = "0.1"
 rustc-serialize = "0.3"
 sbd = "0.1"
 url = "1.1"
+
+[dependencies.magick_rust]
+git = "https://github.com/gadomski/magick-rust.git"
+branch = "master"
+optional = true
 
 [dependencies.staticfile]
 version = "0.2"

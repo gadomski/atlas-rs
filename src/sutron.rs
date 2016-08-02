@@ -1,4 +1,7 @@
-//! Utitlies for working with Sutron files, such as log files.
+//! Sutron log files come off of our data logger.
+//!
+//! These log files are not transmitted back via satellite, but are retrieved when we take trips to
+//! the site.
 
 use std::error;
 use std::fmt;
