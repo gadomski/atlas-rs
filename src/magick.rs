@@ -16,7 +16,7 @@ use iron::mime::Mime;
 use magick_rust::{MagickWand, magick_wand_genesis};
 
 use {Error, Result};
-use cam::Storage;
+use cam::Camera;
 use watch::DirectoryWatcher;
 
 static START: Once = ONCE_INIT;
@@ -33,7 +33,7 @@ macro_rules! try_magick{ ($x:expr) => {{
 /// A structure that creates a gif from a directory of images.
 #[derive(Debug)]
 pub struct GifMaker {
-    storage: Storage,
+    camera: Camera,
     width: u64,
     height: u64,
     loop_: bool,
@@ -49,11 +49,13 @@ impl GifMaker {
     ///
     /// ```
     /// # use atlas::magick::GifMaker;
-    /// let gif_maker = GifMaker::new("data", 512, 384);
+    /// let gif_maker = GifMaker::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
+    ///                               512,
+    ///                               384);
     /// ```
-    pub fn new<P: AsRef<Path>>(path: P, width: u64, height: u64) -> GifMaker {
+    pub fn new(camera: Camera, width: u64, height: u64) -> GifMaker {
         GifMaker {
-            storage: Storage::new(path),
+            camera: camera,
             width: width,
             height: height,
             loop_: DEFAULT_LOOP,
@@ -62,21 +64,21 @@ impl GifMaker {
 
     /// Returns a gif, as a `Vec<u8>`, of all images since the given date time.
     ///
-    /// The delay argument is the number of centiseconds between frames.
-    ///
     /// ```
     /// # extern crate chrono;
     /// # extern crate atlas;
     /// # use chrono::{Duration, UTC, TimeZone};
     /// # use atlas::magick::GifMaker;
     /// # fn main() {
-    /// let gif_maker = GifMaker::new("data", 512, 384);
+    /// let gif_maker = GifMaker::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
+    ///                               512,
+    ///                               384);
     /// let ref datetime = UTC.ymd(2016, 7, 25).and_hms(0, 0, 0);
     /// let gif = gif_maker.since(datetime, Duration::milliseconds(500)).unwrap();
     /// # }
     pub fn since(&self, since: &DateTime<UTC>, delay: Duration) -> Result<Vec<u8>> {
         START.call_once(|| magick_wand_genesis());
-        let filenames = try!(self.storage.paths_since(since))
+        let filenames = try!(self.camera.paths_since(since))
             .into_iter()
             .collect::<Vec<_>>();
         let mut wand = MagickWand::new();
@@ -118,51 +120,32 @@ impl GifWatcher {
     /// # extern crate chrono;
     /// # extern crate atlas;
     /// use chrono::Duration;
+    /// # use std::sync::{RwLock, Arc};
     /// # use atlas::magick::GifWatcher;
     /// # fn main() {
-    /// let watcher = GifWatcher::new("data",
+    /// let gif = Arc::new(RwLock::new(Vec::new()));
+    /// let watcher = GifWatcher::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
     ///                               Duration::days(2),
     ///                               Duration::milliseconds(500),
     ///                               512,
-    ///                               328);
+    ///                               328,
+    ///                               gif);
     /// # }
     /// ```
-    pub fn new<P: AsRef<Path>>(directory: P,
-                               duration: Duration,
-                               delay: Duration,
-                               width: u64,
-                               height: u64)
-                               -> GifWatcher {
+    pub fn new(camera: Camera,
+               duration: Duration,
+               delay: Duration,
+               width: u64,
+               height: u64,
+               gif: Arc<RwLock<Vec<u8>>>)
+               -> GifWatcher {
         GifWatcher {
-            directory: directory.as_ref().to_path_buf(),
-            gif_maker: GifMaker::new(directory, width, height),
-            gif: Arc::new(RwLock::new(Vec::new())),
+            directory: camera.path().to_path_buf(),
+            gif_maker: GifMaker::new(camera, width, height),
+            gif: gif,
             duration: duration,
             delay: delay,
         }
-    }
-
-    /// Clones the `Arc` that holds the internal gif.
-    ///
-    /// Downstream users of this `GifWatcher` should use this to get a copy of the updating gif.
-    ///
-    ///
-    /// ```
-    /// # extern crate chrono;
-    /// # extern crate atlas;
-    /// use chrono::Duration;
-    /// # use atlas::magick::GifWatcher;
-    /// # fn main() {
-    /// let watcher = GifWatcher::new("data",
-    ///                               Duration::days(2),
-    ///                               Duration::milliseconds(500),
-    ///                               512,
-    ///                               328);
-    /// let gif = watcher.gif(); // the contained Vec<u8> will be updated on filesystem changes
-    /// # }
-    /// ```
-    pub fn gif(&self) -> Arc<RwLock<Vec<u8>>> {
-        self.gif.clone()
     }
 }
 
@@ -195,14 +178,11 @@ impl GifHandler {
     /// # extern crate chrono;
     /// # extern crate atlas;
     /// use chrono::Duration;
-    /// # use atlas::magick::{GifHandler, GifWatcher};
+    /// # use std::sync::{Arc, RwLock};
+    /// # use atlas::magick::GifHandler;
     /// # fn main() {
-    /// let watcher = GifWatcher::new("data",
-    ///                               Duration::days(2),
-    ///                               Duration::milliseconds(500),
-    ///                               512,
-    ///                               328);
-    /// let handler = GifHandler::new(watcher.gif());
+    /// let gif = Arc::new(RwLock::new(Vec::new()));
+    /// let handler = GifHandler::new(gif.clone());
     /// # }
     /// ```
     pub fn new(gif: Arc<RwLock<Vec<u8>>>) -> GifHandler {
@@ -227,9 +207,11 @@ mod tests {
 
     use chrono::{Duration, TimeZone, UTC};
 
+    use cam::Camera;
+
     #[test]
     fn makes_gif() {
-        let gifmaker = GifMaker::new("data", 512, 384);
+        let gifmaker = GifMaker::new(Camera::new("ATLAS_CAM", "data").unwrap(), 512, 384);
         let _ = gifmaker.since(&UTC.ymd(2016, 1, 1).and_hms(0, 0, 0),
                    Duration::milliseconds(200))
             .unwrap();

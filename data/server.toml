@@ -1,0 +1,14 @@
+[server]
+ip = "0.0.0.0"
+port = 3000
+resource_dir = "/Users/gadomski/Repos/atlas-rs"
+iridium_dir = "/Users/gadomski/iridium"
+imei = "300234063909200"
+img_dir = "/Users/gadomski/iridiumcam/ATLAS_CAM"
+img_url = "http://iridiumcam.lidar.io/ATLAS_CAM"
+
+[gif]
+days = 7
+delay = 500
+height = 256
+width = 192

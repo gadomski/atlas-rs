@@ -10,9 +10,15 @@ extern crate handlebars_iron;
 extern crate iron;
 #[macro_use]
 extern crate log;
+extern crate logger;
+extern crate mount;
 extern crate notify;
+extern crate regex;
+extern crate router;
 extern crate rustc_serialize;
 extern crate sbd;
+extern crate staticfile;
+extern crate toml;
 extern crate url;
 #[cfg(feature = "magick_rust")]
 extern crate magick_rust;

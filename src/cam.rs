@@ -8,30 +8,38 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, UTC};
 
+use regex::Regex;
+
 use {Error, Result};
 
-/// A place where remote images are stored.
-///
-/// For now, this is just a local directory.
+/// A remote camera, e.g. `ATLAS_CAM` or `HEL_TERMINUS`.
 #[derive(Debug)]
-pub struct Storage {
+pub struct Camera {
+    name: String,
     path: PathBuf,
+    regex: Regex,
 }
 
-impl Storage {
-    /// Creates a new storage for the given path.
+impl Camera {
+    /// Creates a new named camera that stores images in the given path.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use atlas::cam::Storage;
-    /// let storage = Storage::new("data");
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
     /// ```
-    pub fn new<P: AsRef<Path>>(path: P) -> Storage {
-        Storage { path: path.as_ref().to_path_buf() }
+    pub fn new<P: AsRef<Path>>(name: &str, path: P) -> Result<Camera> {
+        let mut regex_string = String::from(name);
+        regex_string.push_str(r"_(?P<datetime>\d{4}\d{2}\d{2}_\d{2}\d{2}\d{2}).jpg");
+        Ok(Camera {
+            name: name.to_string(),
+            path: path.as_ref().to_path_buf(),
+            regex: try!(Regex::new(&regex_string)),
+        })
     }
 
-    /// Returns the file name of the latest image from this directory.
+    /// Returns the file name of the latest image from this camera.
     ///
     /// This method will ignore all datetime parsing errors, in the interest of
     /// returning a value if one can be returned.
@@ -39,28 +47,28 @@ impl Storage {
     /// # Examples
     ///
     /// ```
-    /// # use atlas::cam::Storage;
-    /// let storage = Storage::new("data");
-    /// let file_name = storage.latest_file_name().unwrap().unwrap();
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// let file_name = camera.latest_file_name().unwrap().unwrap();
     /// ```
     pub fn latest_file_name(&self) -> Result<Option<OsString>> {
         self.file_names().map(|v| v.into_iter().last())
     }
 
-    /// Returns all the image file names in this directory.
+    /// Returns all the image file names for this camera.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use atlas::cam::Storage;
-    /// let storage = Storage::new("data");
-    /// let file_names = storage.file_names().unwrap();
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// let file_names = camera.file_names().unwrap();
     /// ```
     pub fn file_names(&self) -> Result<Vec<OsString>> {
         self.paths().map(|v| v.into_iter().map(|p| p.file_name().unwrap().to_os_string()).collect())
     }
 
-    /// Returns all file names taken since a certain date.
+    /// Returns all file names of images taken since a certain date.
     ///
     /// # Examples
     ///
@@ -68,11 +76,11 @@ impl Storage {
     /// # extern crate chrono;
     /// # extern crate atlas;
     /// # use chrono::{UTC, TimeZone};
-    /// # use atlas::cam::Storage;
+    /// # use atlas::cam::Camera;
     /// # fn main() {
-    /// let storage = Storage::new("data");
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
     /// let ref date = UTC.ymd(2016, 7, 25).and_hms(14, 15, 00);
-    /// let file_names = storage.file_names_since(date).unwrap();
+    /// let file_names = camera.file_names_since(date).unwrap();
     /// # }
     /// ```
     pub fn file_names_since(&self, datetime: &DateTime<UTC>) -> Result<Vec<OsString>> {
@@ -80,7 +88,7 @@ impl Storage {
             .map(|v| v.into_iter().map(|p| p.file_name().unwrap().to_os_string()).collect())
     }
 
-    /// Returns all paths taken since a certain date.
+    /// Returns all paths of images taken since a certain date.
     ///
     /// # Examples
     ///
@@ -88,42 +96,70 @@ impl Storage {
     /// # extern crate chrono;
     /// # extern crate atlas;
     /// # use chrono::{UTC, TimeZone};
-    /// # use atlas::cam::Storage;
+    /// # use atlas::cam::Camera;
     /// # fn main() {
-    /// let storage = Storage::new("data");
-    /// let paths = storage.paths_since(&UTC.ymd(2016, 7, 25).and_hms(14, 15, 00)).unwrap();
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// let paths = camera.paths_since(&UTC.ymd(2016, 7, 25).and_hms(14, 15, 00)).unwrap();
     /// # }
     /// ```
     pub fn paths_since(&self, datetime: &DateTime<UTC>) -> Result<Vec<PathBuf>> {
         self.paths().map(|v| {
             v.into_iter()
-                .filter(|f| datetime_from_path(f).map(|d| &d > datetime).unwrap_or(false))
+                .filter(|f| self.datetime(f).map(|d| &d > datetime).unwrap_or(false))
                 .collect()
         })
     }
 
-    /// Returns all paths in this storage.
+    /// Returns all paths of images taken by this camera.
+    ///
+    /// # Panics
+    ///
+    /// If the regular expression used for matching filenames fails for some reason, this will
+    /// panic.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use atlas::cam::Storage;
-    /// let storage = Storage::new("data");
-    /// let paths = storage.paths().unwrap();
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// let paths = camera.paths().unwrap();
     /// ```
     pub fn paths(&self) -> Result<Vec<PathBuf>> {
         Ok(try!(read_dir(&self.path))
-            .filter_map(|r| r.map(|d| d.path()).ok())
-            .filter(|p| p.extension() == Some("jpg".as_ref()))
+            .filter_map(|r| {
+                r.ok().and_then(|d| if self.regex
+                    .is_match(&d.file_name().to_string_lossy()) {
+                    Some(d.path())
+                } else {
+                    None
+                })
+            })
             .collect::<Vec<_>>())
     }
-}
 
-/// Returns the UTC datetime coded in the path.
-pub fn datetime_from_path<P: AsRef<Path>>(path: P) -> Result<DateTime<UTC>> {
-    UTC.datetime_from_str(path.as_ref().file_name().and_then(|p| p.to_str()).unwrap_or(""),
-                           "ATLAS_CAM_%Y%m%d_%H%M%S.jpg")
-        .map_err(|e| Error::from(e))
+    /// Returns the path of this camera.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// assert_eq!("data", camera.path().to_string_lossy());
+    /// ```
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Returns the UTC datetime coded in an image path.
+    pub fn datetime<P: AsRef<Path>>(&self, path: P) -> Result<DateTime<UTC>> {
+        if let Some(f) = path.as_ref().file_name() {
+            if let Some(c) = self.regex.captures(&f.to_string_lossy()) {
+                return UTC.datetime_from_str(&c["datetime"], "%Y%m%d_%H%M%S")
+                    .map_err(|e| Error::from(e));
+            }
+        }
+        Err(Error::InvalidCameraPath(self.name.clone(), path.as_ref().to_path_buf()))
+    }
 }
 
 #[cfg(test)]
@@ -134,16 +170,16 @@ mod tests {
 
     #[test]
     fn latest_image() {
-        let storage = Storage::new("data");
-        let file_name = storage.latest_file_name().unwrap().unwrap();
+        let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+        let file_name = camera.latest_file_name().unwrap().unwrap();
         assert_eq!("ATLAS_CAM_20160725_141500.jpg", file_name.to_string_lossy());
     }
 
     #[test]
     fn file_names() {
-        let storage = Storage::new("data");
+        let camera = Camera::new("ATLAS_CAM", "data").unwrap();
         assert_eq!(vec!["ATLAS_CAM_20160725_121500.jpg", "ATLAS_CAM_20160725_141500.jpg"],
-                   storage.file_names()
+                   camera.file_names()
                        .unwrap()
                        .iter()
                        .map(|f| f.as_os_str())
@@ -152,18 +188,34 @@ mod tests {
 
     #[test]
     fn datetime_from_path_ok() {
+        let camera = Camera::new("ATLAS_CAM", "data").unwrap();
         assert_eq!(UTC.ymd(2016, 7, 25).and_hms(14, 15, 0),
-                   datetime_from_path("ATLAS_CAM_20160725_141500.jpg").unwrap());
+                   camera.datetime("ATLAS_CAM_20160725_141500.jpg").unwrap());
         assert_eq!(UTC.ymd(2016, 7, 25).and_hms(14, 15, 0),
-                   datetime_from_path("data/ATLAS_CAM_20160725_141500.jpg").unwrap());
+                   camera.datetime("data/ATLAS_CAM_20160725_141500.jpg").unwrap());
     }
 
     #[test]
     fn file_names_since() {
-        let storage = Storage::new("data");
-        let file_names = storage.file_names_since(&UTC.ymd(2016, 7, 25).and_hms(10, 0, 0)).unwrap();
+        let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+        let file_names = camera.file_names_since(&UTC.ymd(2016, 7, 25).and_hms(10, 0, 0)).unwrap();
         assert_eq!(2, file_names.len());
-        let file_names = storage.file_names_since(&UTC.ymd(2016, 7, 25).and_hms(13, 0, 0)).unwrap();
+        let file_names = camera.file_names_since(&UTC.ymd(2016, 7, 25).and_hms(13, 0, 0)).unwrap();
         assert_eq!(1, file_names.len());
+    }
+
+    #[test]
+    fn hel_terminus_paths() {
+        let camera = Camera::new("HEL_Terminus", "data").unwrap();
+        let paths = camera.paths().unwrap();
+        assert_eq!(2, paths.len());
+    }
+
+    #[test]
+    fn hel_terminus_datetime() {
+        let camera = Camera::new("HEL_Terminus", "data").unwrap();
+        let file_name = camera.latest_file_name().unwrap().unwrap();
+        assert_eq!(UTC.ymd(2016, 8, 3).and_hms(18, 0, 0),
+                   camera.datetime(file_name).unwrap());
     }
 }

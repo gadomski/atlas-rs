@@ -86,28 +86,20 @@ impl HeartbeatWatcher {
     /// # Examples
     ///
     /// ```
+    /// # use std::sync::{Arc, RwLock};
     /// # use atlas::watch::HeartbeatWatcher;
-    /// let watcher = HeartbeatWatcher::new("data", "300234063909200");
+    /// let heartbeats = Arc::new(RwLock::new(Vec::new()));
+    /// let watcher = HeartbeatWatcher::new("data", "300234063909200", heartbeats);
     /// ```
-    pub fn new<P: AsRef<Path>>(directory: P, imei: &str) -> HeartbeatWatcher {
+    pub fn new<P: AsRef<Path>>(directory: P,
+                               imei: &str,
+                               heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>)
+                               -> HeartbeatWatcher {
         HeartbeatWatcher {
             directory: directory.as_ref().to_path_buf(),
             imei: imei.to_string(),
-            heartbeats: Arc::new(RwLock::new(Vec::new())),
+            heartbeats: heartbeats,
         }
-    }
-
-    /// Gets a new clone of the `Arc<RwLock<Vec<HeartbeatV1>>`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use atlas::watch::HeartbeatWatcher;
-    /// let watcher = HeartbeatWatcher::new("data", "300234063909200");
-    /// let heartbeats = watcher.heartbeats();
-    /// ```
-    pub fn heartbeats(&self) -> Arc<RwLock<Vec<HeartbeatV1>>> {
-        self.heartbeats.clone()
     }
 }
 

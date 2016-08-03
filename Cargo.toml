@@ -16,9 +16,11 @@ log = "0.3"
 logger = "0.0.3"
 mount = "0.1"
 notify = "2.6"
+regex = "0.1"
 router = "0.1"
 rustc-serialize = "0.3"
 sbd = "0.1"
+toml = "0.1"
 url = "1.1"
 
 [dependencies.magick_rust]
