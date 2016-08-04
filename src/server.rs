@@ -46,6 +46,9 @@ use watch::{DirectoryWatcher, HeartbeatWatcher};
 use magick::{GifHandler, GifWatcher};
 
 /// The ATLAS status server.
+///
+/// The server is configured with a toml file. See `data/config.toml` in this repository for an
+/// example of a config file.
 #[derive(Debug)]
 pub struct Server {
     config: Configuration,
