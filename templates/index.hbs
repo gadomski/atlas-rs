@@ -55,13 +55,36 @@
       </div>
 
       <div class="col-xs-12 col-md-6 col-md-offset-2">
-        <div class="thumbnail">
-          <a href="{{latest_image_url}}">
-            <img src="{{latest_image_url}}" alt="The latest image from the ATLAS camera.">
-          </a>
-          <div class="caption">
-            <p>This image was taken at {{latest_image_datetime}}.</p>
-          </div>
+        <ul class="nav nav-tabs" role="tablist">
+          {{#each latest_images}}
+          <li role="presentation" class="{{active}}">
+            <a href="#{{id}}" aria-controls="{{id}}" role="tab" data-toggle="tab">{{name}}</a>
+          </li>
+          {{/each}}
+          <li role="presentation">
+            <a href="#atlas_cam_gif" aria-controls="atlas_cam_gif" role="tab" data-toggle="tab">ATLAS_CAM gif</a>
+          </li>
+        </ul>
+
+        <div class="tab-content">
+          {{#each latest_images}}
+            <div class="thumbnail tab-pane {{active}}" id="{{id}}" role="tabpanel">
+              <a href="{{url}}">
+                <img src="{{url}}" alt="The latest image from the {{name}} camera.">
+              </a>
+              <div class="caption">
+                <p>This image was taken at {{datetime}}.</p>
+              </div>
+            </div>
+          {{/each}}
+            <div class="thumbnail tab-pane" id="atlas_cam_gif" role="tabpanel">
+              <a href="atlas_cam.gif">
+                <img src="atlas_cam.gif" alt="GIF of recent ATLAS_CAM images.">
+              </a>
+              <div class="caption">
+                <p>GIF of the last seven days of ATLAS_CAM images.</p>
+              </div>
+            </div>
         </div>
       </div>
 

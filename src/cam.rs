@@ -2,13 +2,15 @@
 //!
 //! These include the ATLAS cam and other remote cameras e.g. the Helheim terminus cam.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, UTC};
 
 use regex::Regex;
+
+use url::Url;
 
 use {Error, Result};
 
@@ -151,6 +153,20 @@ impl Camera {
     }
 
     /// Returns the UTC datetime coded in an image path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate chrono;
+    /// # extern crate atlas;
+    /// use chrono::{UTC, TimeZone};
+    /// # use atlas::cam::Camera;
+    /// # fn main() {
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// let datetime = camera.datetime("data/ATLAS_CAM_20160725_121500.jpg").unwrap();
+    /// assert_eq!(UTC.ymd(2016, 7, 25).and_hms(12, 15, 00), datetime);
+    /// # }
+    /// ```
     pub fn datetime<P: AsRef<Path>>(&self, path: P) -> Result<DateTime<UTC>> {
         if let Some(f) = path.as_ref().file_name() {
             if let Some(c) = self.regex.captures(&f.to_string_lossy()) {
@@ -160,6 +176,54 @@ impl Camera {
         }
         Err(Error::InvalidCameraPath(self.name.clone(), path.as_ref().to_path_buf()))
     }
+
+    /// Returns this camera's name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use atlas::cam::Camera;
+    /// let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+    /// assert_eq!("ATLAS_CAM", camera.name());
+    /// ```
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Constructs a url using the given base url and the filename.
+    ///
+    /// The url is constructed by taking the base, adding the name of the parent directory of all
+    /// of the images, then appending the image filename.
+    ///
+    /// Returns `None` if the provided url cannot be a base.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate url;
+    /// # extern crate atlas;
+    /// use url::Url;
+    /// # use atlas::cam::Camera;
+    /// fn main() {
+    /// let url = Url::parse("http://iridiumcam.lidar.io").unwrap();
+    /// let camera = Camera::new("", "data").unwrap();
+    /// assert_eq!("http://iridiumcam.lidar.io/data/foobar.jpg",
+    ///     camera.url(&url, "foobar.jpg").unwrap().as_str());
+    /// # }
+    /// ```
+    pub fn url<S: AsRef<OsStr>>(&self, url: &Url, file_name: S) -> Option<Url> {
+        let mut url = url.clone();
+        self.path.file_name().and_then(|directory| {
+            match url.path_segments_mut() {
+                Ok(mut segments) => {
+                    segments.push(&directory.to_string_lossy());
+                    segments.push(&file_name.as_ref().to_string_lossy());
+                }
+                Err(_) => return None,
+            }
+            Some(url)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -167,6 +231,8 @@ mod tests {
     use super::*;
 
     use chrono::{TimeZone, UTC};
+
+    use url::Url;
 
     #[test]
     fn latest_image() {
@@ -217,5 +283,13 @@ mod tests {
         let file_name = camera.latest_file_name().unwrap().unwrap();
         assert_eq!(UTC.ymd(2016, 8, 3).and_hms(18, 0, 0),
                    camera.datetime(file_name).unwrap());
+    }
+
+    #[test]
+    fn url() {
+        let url = Url::parse("http://iridiumcam.lidar.io").unwrap();
+        let camera = Camera::new("ATLAS_CAM", "data").unwrap();
+        assert_eq!("http://iridiumcam.lidar.io/data/foobar.jpg",
+                   camera.url(&url, "foobar.jpg").unwrap().as_str());
     }
 }

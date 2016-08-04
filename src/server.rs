@@ -1,6 +1,9 @@
 //! Serve data using Iron.
 
+use std::ascii::AsciiExt;
 use std::collections::BTreeMap;
+#[cfg(feature = "magick_rust")]
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::fs::File;
 use std::io::Read;
@@ -8,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use chrono::{Duration, UTC};
+#[cfg(feature = "magick_rust")]
+use chrono::Duration;
+use chrono::UTC;
 
 use handlebars_iron::{DirectorySource, HandlebarsEngine, Template};
 
@@ -36,8 +41,9 @@ use url::Url;
 use {Error, Result};
 use cam::Camera;
 use heartbeat::{HeartbeatV1, expected_next_scan_time};
-use magick::{GifHandler, GifWatcher};
 use watch::{DirectoryWatcher, HeartbeatWatcher};
+#[cfg(feature = "magick_rust")]
+use magick::{GifHandler, GifWatcher};
 
 /// The ATLAS status server.
 #[derive(Debug)]
@@ -45,12 +51,13 @@ pub struct Server {
     config: Configuration,
     heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
     #[cfg(feature = "magick_rust")]
-    gif: Arc<RwLock<Vec<u8>>>,
+    gifs: HashMap<String, Arc<RwLock<Vec<u8>>>>,
 }
 
 #[derive(Debug, RustcDecodable)]
 struct Configuration {
     server: ServerConfig,
+    camera: Vec<CameraConfig>,
     #[cfg(feature = "magick_rust")]
     gif: GifConfig,
 }
@@ -62,8 +69,14 @@ struct ServerConfig {
     resource_dir: String,
     iridium_dir: String,
     imei: String,
-    img_dir: String,
     img_url: String,
+    active_camera: String,
+}
+
+#[derive(Debug, RustcDecodable)]
+struct CameraConfig {
+    directory: String,
+    name: Option<String>,
 }
 
 #[cfg(feature = "magick_rust")]
@@ -73,6 +86,7 @@ struct GifConfig {
     delay: i64,
     width: u64,
     height: u64,
+    names: Vec<String>,
 }
 
 impl Server {
@@ -82,9 +96,40 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// ```
+    #[cfg(feature = "magick_rust")]
     pub fn new<P: AsRef<Path>>(config_file: P) -> Result<Server> {
+        let config = try!(Server::config_from_file(config_file));
+        Ok(Server {
+            gifs: config.gif
+                .names
+                .iter()
+                .map(|n| (n.to_string(), Arc::new(RwLock::new(Vec::new()))))
+                .collect(),
+            config: config,
+            heartbeats: Arc::new(RwLock::new(Vec::new())),
+        })
+    }
+
+    /// Creates a new server from the provided toml configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use atlas::server::Server;
+    /// let server = Server::new("data/config.toml").unwrap();
+    /// ```
+    #[cfg(not(feature = "magick_rust"))]
+    pub fn new<P: AsRef<Path>>(config_file: P) -> Result<Server> {
+        let config = try!(Server::config_from_file(config_file));
+        Ok(Server {
+            config: config,
+            heartbeats: Arc::new(RwLock::new(Vec::new())),
+        })
+    }
+
+    fn config_from_file<P: AsRef<Path>>(config_file: P) -> Result<Configuration> {
         let mut config = String::new();
         {
             let mut file = try!(File::open(config_file));
@@ -96,12 +141,7 @@ impl Server {
             None => return Err(Error::TomlParse(parser.errors.clone())),
         };
         let mut decoder = toml::Decoder::new(toml::Value::Table(toml));
-        let config = try!(Configuration::decode(&mut decoder));
-        Ok(Server {
-            config: config,
-            heartbeats: Arc::new(RwLock::new(Vec::new())),
-            gif: Arc::new(RwLock::new(Vec::new())),
-        })
+        Configuration::decode(&mut decoder).map_err(|e| Error::from(e))
     }
 
     /// Starts the atlas server.
@@ -112,7 +152,7 @@ impl Server {
     ///
     /// ```no_run
     /// # use atlas::server::Server;
-    /// let mut server = Server::new("data/server.toml").unwrap();
+    /// let mut server = Server::new("data/config.toml").unwrap();
     /// server.serve().unwrap().unwrap();
     /// ```
     pub fn serve(&mut self) -> Result<HttpResult<Listening>> {
@@ -134,24 +174,11 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// let (ip, port) = server.addr();
     /// ```
     pub fn addr(&self) -> (&str, u16) {
         (&self.config.server.ip, self.config.server.port)
-    }
-
-    /// Returns the image directory for this server.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
-    /// let dir = server.img_dir();
-    /// ```
-    pub fn img_dir(&self) -> &Path {
-        Path::new(&self.config.server.img_dir)
     }
 
     /// Creates and returns new image url.
@@ -162,7 +189,7 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// let url = server.img_url().unwrap();
     /// ```
     pub fn img_url(&self) -> Result<Url> {
@@ -175,7 +202,7 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// let dir = server.iridium_dir();
     /// ```
     pub fn iridium_dir(&self) -> &Path {
@@ -188,7 +215,7 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// let imei = server.imei();
     /// ```
     pub fn imei(&self) -> &str {
@@ -201,7 +228,7 @@ impl Server {
     ///
     /// ```
     /// # use atlas::server::Server;
-    /// let server = Server::new("data/server.toml").unwrap();
+    /// let server = Server::new("data/config.toml").unwrap();
     /// let static_path = server.resource_path("static");
     /// ```
     pub fn resource_path<P: AsRef<Path>>(&self, other: P) -> PathBuf {
@@ -210,24 +237,63 @@ impl Server {
         path
     }
 
+    /// Returns a vector of this server's cameras.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use atlas::server::Server;
+    /// let server = Server::new("data/config.toml").unwrap();
+    /// let cameras = server.cameras();
+    /// ```
+    pub fn cameras(&self) -> Result<Vec<Camera>> {
+        self.config
+            .camera
+            .iter()
+            .map(|c| {
+                let directory = Path::new(&c.directory);
+                let name = match c.name {
+                    Some(ref name) => name.to_string(),
+                    None => {
+                        try!(directory.file_name()
+                                .ok_or(Error::InvalidCameraPath("no file name".to_string(),
+                                                                directory.to_path_buf())))
+                            .to_string_lossy()
+                            .into_owned()
+                    }
+                };
+                Camera::new(&name, directory)
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "magick_rust")]
+    fn camera_map(&self) -> Result<HashMap<String, Camera>> {
+        self.cameras().map(|v| {
+            v.into_iter()
+                .map(|c| (c.name().to_string(), c))
+                .collect::<HashMap<String, Camera>>()
+        })
+    }
+
     fn router(&self) -> Result<Router> {
         let mut router = Router::new();
         router.get("/",
                    try!(IndexHandler::new(self.heartbeats.clone(),
-                                          &self.img_dir(),
+                                          try!(self.cameras()),
+                                          &self.config.server.active_camera,
                                           try!(self.img_url()))));
         router.get("/soc.csv",
                    CsvHandler::new(self.heartbeats.clone(), SocCsvProvider));
         router.get("/temperature.csv",
                    CsvHandler::new(self.heartbeats.clone(), TemperatureCsvProvider));
 
-        self.add_gif_handler(&mut router);
+        try!(self.add_gif_handler(&mut router));
         Ok(router)
     }
 
     fn staticfiles(&self) -> Static {
-        let static_path = self.resource_path("static");
-        Static::new(static_path)
+        Static::new(self.resource_path("static"))
     }
 
     fn handlebars_engine(&self) -> Result<HandlebarsEngine> {
@@ -256,24 +322,59 @@ impl Server {
     }
 
     #[cfg(feature = "magick_rust")]
-    fn add_gif_handler(&self, router: &mut Router) {
-        router.get("/atlas-cam.gif", GifHandler::new(self.gif.clone()));
+    fn add_gif_handler(&self, router: &mut Router) -> Result<()> {
+        let mut cameras = try!(self.camera_map());
+        for name in self.config.gif.names.iter() {
+            match cameras.remove(name) {
+                Some(camera) => {
+                    router.get(format!("/{}.gif", camera.name().to_ascii_lowercase()),
+                               GifHandler::new(self.gifs[camera.name()].clone()));
+                }
+                None => {
+                    return Err(Error::ServerConfigError(format!("Invalid camera name in gif \
+                                                                 config: {}",
+                                                                name)))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "magick_rust"))]
+    fn add_gif_handler(&self, _: &mut Router) -> Result<()> {
+        Ok(())
     }
 
     #[cfg(feature = "magick_rust")]
     fn start_gif_watcher(&self) -> Result<()> {
-        // FIXME adapt to other things, maybe
-        let camera = try!(Camera::new("ATLAS_CAM", self.img_dir()));
-        let mut watcher = GifWatcher::new(camera,
-                                          Duration::days(self.config.gif.days),
-                                          Duration::milliseconds(self.config.gif.delay),
-                                          self.config.gif.width,
-                                          self.config.gif.height,
-                                          self.gif.clone());
-        thread::spawn(move || {
-            watcher.refresh().unwrap();
-            watcher.watch().unwrap();
-        });
+        let mut cameras = try!(self.camera_map());
+        for name in self.config.gif.names.iter() {
+            match cameras.remove(name) {
+                Some(camera) => {
+                    let mut watcher =
+                        GifWatcher::new(camera,
+                                        Duration::days(self.config.gif.days),
+                                        Duration::milliseconds(self.config.gif.delay),
+                                        self.config.gif.width,
+                                        self.config.gif.height,
+                                        self.gifs[name].clone());
+                    thread::spawn(move || {
+                        watcher.refresh().unwrap();
+                        watcher.watch().unwrap();
+                    });
+                }
+                None => {
+                    return Err(Error::ServerConfigError(format!("Could not start gif watcher \
+                                                                 for camera: {}",
+                                                                name)))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "magick_rust"))]
+    fn start_gif_watcher(&self) -> Result<()> {
         Ok(())
     }
 }
@@ -282,7 +383,8 @@ impl Server {
 #[derive(Debug)]
 pub struct IndexHandler {
     heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
-    img_directory: Camera,
+    cameras: Vec<Camera>,
+    active_camera: String,
     url: Url,
 }
 
@@ -299,20 +401,39 @@ impl IndexHandler {
     /// # extern crate atlas;
     /// # use std::sync::{Arc, RwLock};
     /// # use atlas::server::IndexHandler;
+    /// use atlas::cam::Camera;
     /// # fn main() {
     /// let heartbeats = Arc::new(RwLock::new(Vec::new()));
     /// let url = url::Url::parse("http://iridiumcam.lidar.io").unwrap();
-    /// let handler = IndexHandler::new(heartbeats, "data", url).unwrap();
+    /// let cameras = vec![Camera::new("ATLAS_CAM", "data").unwrap()];
+    /// let handler = IndexHandler::new(heartbeats, cameras, "ATLAS_CAM", url).unwrap();
     /// # }
     /// ```
-    pub fn new<P: AsRef<Path>>(heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
-                               img_dir: P,
-                               img_url: Url)
-                               -> Result<IndexHandler> {
+    pub fn new(heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
+               cameras: Vec<Camera>,
+               active_camera: &str,
+               img_url: Url)
+               -> Result<IndexHandler> {
+        let mut seen_active_camera = false;
+        for camera in cameras.iter() {
+            if try!(camera.latest_file_name()).is_none() {
+                return Err(Error::ServerConfigError(format!("Could not find the latest image \
+                                                             for camera {} (path: {})",
+                                                            camera.name(),
+                                                            camera.path().to_string_lossy())));
+            }
+            if camera.name() == active_camera {
+                seen_active_camera = true;
+            }
+        }
+        if !seen_active_camera {
+            return Err(Error::ServerConfigError(format!("Invalid active camera name: {}",
+                                                        active_camera)));
+        }
         Ok(IndexHandler {
             heartbeats: heartbeats,
-            // FIXME we don't just want ATLAS_CAM
-            img_directory: Camera::new("ATLAS_CAM", img_dir).unwrap(),
+            cameras: cameras,
+            active_camera: active_camera.to_string(),
             url: img_url,
         })
     }
@@ -340,15 +461,32 @@ impl Handler for IndexHandler {
                     format!("{}", heartbeat.humidity).to_json());
         data.insert("soc1".to_string(), format!("{}", heartbeat.soc1).to_json());
         data.insert("soc2".to_string(), format!("{}", heartbeat.soc2).to_json());
-        let mut url = self.url.clone();
-        let file_name = iexpect!(itry!(self.img_directory.latest_file_name()),
-                                 (status::NotFound, "No images available."));
-        iexpect!(url.path_segments_mut().ok()).push(&file_name.to_string_lossy());
-        data.insert("latest_image_url".to_string(),
-                    url.as_str()
-                        .to_json());
-        data.insert("latest_image_datetime".to_string(),
-                    itry!(self.img_directory.datetime(file_name)).to_string().to_json());
+
+        let images: Vec<_> = iexpect!(self.cameras
+            .iter()
+            .map(|c| {
+                println!("{:?}", c);
+                c.latest_file_name().ok().and_then(|o| o).and_then(|file_name| {
+                    c.url(&self.url, &file_name).and_then(|url| {
+                        c.datetime(file_name).ok().and_then(|datetime| {
+                            let mut map: BTreeMap<String, Json> = BTreeMap::new();
+                            map.insert("url".to_string(), url.as_str().to_json());
+                            map.insert("datetime".to_string(), datetime.to_string().to_json());
+                            map.insert("id".to_string(),
+                                       format!("latest_image_{}", c.name().to_ascii_lowercase())
+                                           .to_json());
+                            map.insert("name".to_string(), c.name().to_json());
+                            if c.name() == self.active_camera {
+                                map.insert("active".to_string(), "active".to_json());
+                            }
+                            Some(map)
+                        })
+                    })
+                })
+            })
+            .collect());
+        data.insert("latest_images".to_string(), images.to_json());
+
         data.insert("now".to_string(),
                     format!("{}", UTC::now().format("%Y-%m-%d %H:%M:%S UTC")).to_json());
 
@@ -453,43 +591,52 @@ mod tests {
 
     #[test]
     fn addr() {
-        let server = Server::new("data/server.toml").unwrap();
+        let server = Server::new("data/config.toml").unwrap();
         let (ip, port) = server.addr();
         assert_eq!(ip, "0.0.0.0");
         assert_eq!(port, 3000);
     }
 
     #[test]
-    fn img_dir() {
-        let server = Server::new("data/server.toml").unwrap();
-        assert_eq!("/Users/gadomski/iridiumcam/ATLAS_CAM",
-                   server.img_dir().to_string_lossy());
-    }
-
-    #[test]
     fn iridium_dir() {
-        let server = Server::new("data/server.toml").unwrap();
+        let server = Server::new("data/config.toml").unwrap();
         assert_eq!("/Users/gadomski/iridium",
                    server.iridium_dir().to_string_lossy());
     }
 
     #[test]
     fn imei() {
-        let server = Server::new("data/server.toml").unwrap();
+        let server = Server::new("data/config.toml").unwrap();
         assert_eq!("300234063909200", server.imei());
     }
 
     #[test]
     fn img_url() {
-        let server = Server::new("data/server.toml").unwrap();
-        assert_eq!("http://iridiumcam.lidar.io/ATLAS_CAM",
+        let server = Server::new("data/config.toml").unwrap();
+        assert_eq!("http://iridiumcam.lidar.io/",
                    server.img_url().unwrap().as_str());
     }
 
     #[test]
     fn resource_path() {
-        let server = Server::new("data/server.toml").unwrap();
+        let server = Server::new("data/config.toml").unwrap();
         assert_eq!("/Users/gadomski/Repos/atlas-rs/static",
                    server.resource_path("static").to_string_lossy());
+    }
+
+    #[test]
+    fn cameras() {
+        let server = Server::new("data/config.toml").unwrap();
+        let mut cameras = server.cameras().unwrap();
+        assert_eq!(3, cameras.len());
+        let _ = cameras.pop().unwrap();
+        let camera = cameras.pop().unwrap();
+        assert_eq!("HEL_Terminus", camera.name());
+        assert_eq!("/Users/gadomski/iridiumcam/HEL_TERMINUS",
+                   camera.path().to_string_lossy());
+        let camera = cameras.pop().unwrap();
+        assert_eq!("ATLAS_CAM", camera.name());
+        assert_eq!("/Users/gadomski/iridiumcam/ATLAS_CAM",
+                   camera.path().to_string_lossy());
     }
 }

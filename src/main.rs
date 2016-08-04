@@ -7,6 +7,7 @@ extern crate rustc_serialize;
 #[cfg(feature = "magick_rust")]
 use std::io::Write;
 
+#[cfg(feature = "magick_rust")]
 use atlas::cam::Camera;
 use atlas::server::Server;
 use docopt::Docopt;

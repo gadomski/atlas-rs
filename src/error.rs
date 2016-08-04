@@ -37,6 +37,8 @@ pub enum Error {
     Regex(regex::Error),
     /// Wrapper around `sbd::Error`.
     Sbd(sbd::Error),
+    /// An error in server configuration that could not be caught at decoding.
+    ServerConfigError(String),
     /// Wrapper around `atlas::sutron::Error`.
     Sutron(sutron::Error),
     /// There was one or more errors when parsing some toml.
@@ -59,6 +61,7 @@ impl error::Error for Error {
             Error::Regex(ref err) => err.description(),
             Error::Notify(ref err) => err.description(),
             Error::Sbd(ref err) => err.description(),
+            Error::ServerConfigError(_) => "server configuration error",
             Error::Sutron(ref err) => err.description(),
             Error::TomlDecode(ref err) => err.description(),
             Error::TomlParse(_) => "toml parse error(s)",
@@ -80,6 +83,7 @@ impl fmt::Display for Error {
             Error::ParseHeartbeat(ref err) => write!(f, "heartbeat parsing error: {}", err),
             Error::Notify(ref err) => write!(f, "notify error: {}", err),
             Error::Sbd(ref err) => write!(f, "sbd error: {}", err),
+            Error::ServerConfigError(ref s) => write!(f, "server configuration error: {}", s),
             Error::Regex(ref err) => write!(f, "regex error: {}", err),
             Error::Sutron(ref err) => write!(f, "sutron error: {}", err),
             Error::TomlDecode(ref err) => write!(f, "toml decode error: {}", err),
