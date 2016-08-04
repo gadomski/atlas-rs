@@ -470,7 +470,6 @@ impl Handler for IndexHandler {
         let images: Vec<_> = iexpect!(self.cameras
             .iter()
             .map(|c| {
-                println!("{:?}", c);
                 c.latest_file_name().ok().and_then(|o| o).and_then(|file_name| {
                     c.url(&self.url, &file_name).and_then(|url| {
                         c.datetime(file_name).ok().and_then(|datetime| {
