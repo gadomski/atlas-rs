@@ -43,7 +43,7 @@ use cam::Camera;
 use heartbeat::{HeartbeatV1, expected_next_scan_time};
 use watch::{DirectoryWatcher, HeartbeatWatcher};
 #[cfg(feature = "magick_rust")]
-use magick::{GifHandler, GifWatcher};
+use magick::{self, GifHandler, GifWatcher};
 
 /// The ATLAS status server.
 ///
@@ -351,16 +351,18 @@ impl Server {
     #[cfg(feature = "magick_rust")]
     fn start_gif_watcher(&self) -> Result<()> {
         let mut cameras = try!(self.camera_map());
+        let gif_config = magick::GifConfig {
+            width: self.config.gif.width,
+            height: self.config.gif.height,
+            delay: Duration::milliseconds(self.config.gif.delay),
+        };
         for name in self.config.gif.names.iter() {
             match cameras.remove(name) {
                 Some(camera) => {
-                    let mut watcher =
-                        GifWatcher::new(camera,
-                                        Duration::days(self.config.gif.days),
-                                        Duration::milliseconds(self.config.gif.delay),
-                                        self.config.gif.width,
-                                        self.config.gif.height,
-                                        self.gifs[name].clone());
+                    let mut watcher = GifWatcher::new(camera,
+                                                      Duration::days(self.config.gif.days),
+                                                      gif_config,
+                                                      self.gifs[name].clone());
                     thread::spawn(move || {
                         watcher.refresh().unwrap();
                         watcher.watch().unwrap();

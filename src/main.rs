@@ -12,7 +12,7 @@ use atlas::cam::Camera;
 use atlas::server::Server;
 use docopt::Docopt;
 #[cfg(feature = "magick_rust")]
-use atlas::magick::GifMaker;
+use atlas::magick::{GifConfig, GifMaker};
 
 const USAGE: &'static str =
     "
@@ -62,12 +62,13 @@ fn main() {
 
 #[cfg(feature = "magick_rust")]
 fn gif(args: Args) {
-    // FIXME adapt to other cameras
-    let gif_maker = GifMaker::new(Camera::new("HEL_ATLAS", args.arg_img_dir).unwrap(),
-                                  args.flag_gif_width,
-                                  args.flag_gif_height);
-    let gif = gif_maker.since(&(chrono::UTC::now() - chrono::Duration::days(args.flag_gif_days)),
-               chrono::Duration::milliseconds(args.flag_gif_delay))
+    let config = GifConfig {
+        width: args.flag_gif_width,
+        height: args.flag_gif_height,
+        delay: chrono::Duration::milliseconds(args.flag_gif_delay),
+    };
+    let maker = GifMaker::new(Camera::new("HEL_ATLAS", args.arg_img_dir).unwrap(), config);
+    let gif = maker.since(&(chrono::UTC::now() - chrono::Duration::days(args.flag_gif_days)))
         .unwrap();
     std::io::stdout().write(&gif).unwrap();
 }

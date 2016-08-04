@@ -30,13 +30,32 @@ macro_rules! try_magick{ ($x:expr) => {{
 }};
 }
 
+/// A simple structure to hold common gif configuration values.
+#[derive(Copy, Clone, Debug)]
+pub struct GifConfig {
+    /// The length of time between frames of the gif.
+    pub delay: Duration,
+    /// The height of the gif.
+    pub height: u64,
+    /// The width of the gif.
+    pub width: u64,
+}
+
+impl Default for GifConfig {
+    fn default() -> GifConfig {
+        GifConfig {
+            width: 512,
+            height: 384,
+            delay: Duration::milliseconds(500),
+        }
+    }
+}
+
 /// A structure that creates a gif from a directory of images.
 #[derive(Debug)]
 pub struct GifMaker {
     camera: Camera,
-    width: u64,
-    height: u64,
-    loop_: bool,
+    config: GifConfig,
 }
 
 impl GifMaker {
@@ -50,15 +69,12 @@ impl GifMaker {
     /// ```
     /// # use atlas::magick::GifMaker;
     /// let gif_maker = GifMaker::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
-    ///                               512,
-    ///                               384);
+    ///                               Default::default());
     /// ```
-    pub fn new(camera: Camera, width: u64, height: u64) -> GifMaker {
+    pub fn new(camera: Camera, config: GifConfig) -> GifMaker {
         GifMaker {
             camera: camera,
-            width: width,
-            height: height,
-            loop_: DEFAULT_LOOP,
+            config: config,
         }
     }
 
@@ -71,12 +87,11 @@ impl GifMaker {
     /// # use atlas::magick::GifMaker;
     /// # fn main() {
     /// let gif_maker = GifMaker::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
-    ///                               512,
-    ///                               384);
+    ///                               Default::default());
     /// let ref datetime = UTC.ymd(2016, 7, 25).and_hms(0, 0, 0);
-    /// let gif = gif_maker.since(datetime, Duration::milliseconds(500)).unwrap();
+    /// let gif = gif_maker.since(datetime).unwrap();
     /// # }
-    pub fn since(&self, since: &DateTime<UTC>, delay: Duration) -> Result<Vec<u8>> {
+    pub fn since(&self, since: &DateTime<UTC>) -> Result<Vec<u8>> {
         START.call_once(|| magick_wand_genesis());
         let filenames = try!(self.camera.paths_since(since))
             .into_iter()
@@ -85,9 +100,9 @@ impl GifMaker {
         for filename in filenames {
             try_magick!(wand.read_image(&filename.to_string_lossy()));
         }
-        try_magick!(wand.set_image_delay((delay.num_milliseconds() / 10) as u64));
-        wand.fit(self.width, self.height);
-        let loop_str = if self.loop_ {
+        try_magick!(wand.set_image_delay((self.config.delay.num_milliseconds() / 10) as u64));
+        wand.fit(self.config.width, self.config.height);
+        let loop_str = if DEFAULT_LOOP {
             "0"
         } else {
             "1"
@@ -103,7 +118,6 @@ pub struct GifWatcher {
     gif_maker: GifMaker,
     gif: Arc<RwLock<Vec<u8>>>,
     duration: Duration,
-    delay: Duration,
 }
 
 impl GifWatcher {
@@ -126,25 +140,20 @@ impl GifWatcher {
     /// let gif = Arc::new(RwLock::new(Vec::new()));
     /// let watcher = GifWatcher::new(atlas::cam::Camera::new("ATLAS_CAM", "data").unwrap(),
     ///                               Duration::days(2),
-    ///                               Duration::milliseconds(500),
-    ///                               512,
-    ///                               328,
+    ///                               Default::default(),
     ///                               gif);
     /// # }
     /// ```
     pub fn new(camera: Camera,
                duration: Duration,
-               delay: Duration,
-               width: u64,
-               height: u64,
+               config: GifConfig,
                gif: Arc<RwLock<Vec<u8>>>)
                -> GifWatcher {
         GifWatcher {
             directory: camera.path().to_path_buf(),
-            gif_maker: GifMaker::new(camera, width, height),
+            gif_maker: GifMaker::new(camera, config),
             gif: gif,
             duration: duration,
-            delay: delay,
         }
     }
 }
@@ -155,7 +164,7 @@ impl DirectoryWatcher for GifWatcher {
     }
 
     fn refresh(&mut self) -> Result<()> {
-        let new_gif = try!(self.gif_maker.since(&(UTC::now() - self.duration), self.delay));
+        let new_gif = try!(self.gif_maker.since(&(UTC::now() - self.duration)));
         let mut gif = self.gif.write().unwrap();
         gif.clear();
         gif.extend(new_gif.into_iter());
@@ -211,9 +220,12 @@ mod tests {
 
     #[test]
     fn makes_gif() {
-        let gifmaker = GifMaker::new(Camera::new("ATLAS_CAM", "data").unwrap(), 512, 384);
-        let _ = gifmaker.since(&UTC.ymd(2016, 1, 1).and_hms(0, 0, 0),
-                   Duration::milliseconds(200))
-            .unwrap();
+        let gifmaker = GifMaker::new(Camera::new("ATLAS_CAM", "data").unwrap(),
+                                     GifConfig {
+                                         width: 512,
+                                         height: 282,
+                                         delay: Duration::milliseconds(200),
+                                     });
+        let _ = gifmaker.since(&UTC.ymd(2016, 1, 1).and_hms(0, 0, 0)).unwrap();
     }
 }
