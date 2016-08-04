@@ -127,7 +127,7 @@ impl Camera {
     /// let paths = camera.paths().unwrap();
     /// ```
     pub fn paths(&self) -> Result<Vec<PathBuf>> {
-        Ok(try!(read_dir(&self.path))
+        let mut paths = try!(read_dir(&self.path))
             .filter_map(|r| {
                 r.ok().and_then(|d| if self.regex
                     .is_match(&d.file_name().to_string_lossy()) {
@@ -136,7 +136,9 @@ impl Camera {
                     None
                 })
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        paths.sort_by_key(|p| self.datetime(p).unwrap());
+        Ok(paths)
     }
 
     /// Returns the path of this camera.
