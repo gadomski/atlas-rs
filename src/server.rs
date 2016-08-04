@@ -32,6 +32,8 @@ use router::Router;
 use rustc_serialize::json::{Json, ToJson};
 use rustc_serialize::Decodable;
 
+use sbd::storage::FilesystemStorage;
+
 use staticfile::Static;
 
 use toml;
@@ -286,6 +288,10 @@ impl Server {
                                           try!(self.cameras()),
                                           &self.config.server.active_camera,
                                           try!(self.img_url()))));
+        router.get("/status",
+                   try!(StatusHandler::new(self.heartbeats.clone(),
+                                           self.iridium_dir(),
+                                           self.imeis().clone())));
         router.get("/soc.csv",
                    CsvHandler::new(self.heartbeats.clone(), SocCsvProvider));
         router.get("/temperature.csv",
@@ -501,7 +507,77 @@ impl Handler for IndexHandler {
     }
 }
 
-/// A Iron handler that returns CSV data.
+/// An iron handler that returns a rough status page.
+///
+/// As opposed to the index page, this status page has rougher data and less pretty presentation.
+#[derive(Debug)]
+pub struct StatusHandler {
+    heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
+    storage: FilesystemStorage,
+    imeis: Vec<String>,
+}
+
+impl StatusHandler {
+    /// Creates a new status handler.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::{Arc, RwLock};
+    /// # use atlas::server::StatusHandler;
+    /// let heartbeats = Arc::new(RwLock::new(Vec::new()));
+    /// let handler = StatusHandler::new(heartbeats,
+    ///                                  "/var/iridium",
+    ///                                  vec!["300234063909200".to_string()]);
+    /// ```
+    pub fn new<P: AsRef<Path>>(heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
+                               iridium_dir: P,
+                               imeis: Vec<String>)
+                               -> Result<StatusHandler> {
+        Ok(StatusHandler {
+            heartbeats: heartbeats,
+            storage: try!(FilesystemStorage::open(iridium_dir)),
+            imeis: imeis,
+        })
+    }
+}
+
+impl Handler for StatusHandler {
+    fn handle(&self, _: &mut Request) -> IronResult<Response> {
+        let mut data = BTreeMap::<String, Json>::new();
+        let mut response = Response::new();
+
+        let mut modems = Vec::new();
+        for imei in self.imeis.iter() {
+            let mut messages = self.storage
+                .iter()
+                .filter_map(|r| {
+                    r.ok().and_then(|m| if m.imei() == imei {
+                        Some(m)
+                    } else {
+                        None
+                    })
+                })
+                .collect::<Vec<_>>();
+            messages.sort();
+            let mut modem = BTreeMap::<String, Json>::new();
+            modem.insert("imei".to_string(), imei.to_json());
+            modem.insert("nmessages".to_string(), messages.len().to_json());
+            if let Some(message) = messages.iter().last() {
+                modem.insert("last_message_datetime".to_string(),
+                             message.time_of_session().to_string().to_json());
+                modem.insert("last_message_payload".to_string(),
+                             itry!(message.payload_str()).to_json());
+            }
+            modems.push(modem);
+        }
+        data.insert("modems".to_string(), modems.to_json());
+        response.set_mut(Template::new("status", data)).set_mut(status::Ok);
+        Ok(response)
+    }
+}
+
+/// An Iron handler that returns CSV data.
 ///
 /// The CSV data is provided by a `CsvProvider`, which uses heartbeat information to return
 /// formatted strings.
