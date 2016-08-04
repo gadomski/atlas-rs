@@ -76,12 +76,12 @@ pub trait DirectoryWatcher {
 #[derive(Debug)]
 pub struct HeartbeatWatcher {
     directory: PathBuf,
-    imei: String,
+    imeis: Vec<String>,
     heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>,
 }
 
 impl HeartbeatWatcher {
-    /// Creates a new watcher for a given directory and Iridium IMEI number.
+    /// Creates a new watcher for a given directory and Iridium IMEI numbers.
     ///
     /// # Examples
     ///
@@ -89,15 +89,17 @@ impl HeartbeatWatcher {
     /// # use std::sync::{Arc, RwLock};
     /// # use atlas::watch::HeartbeatWatcher;
     /// let heartbeats = Arc::new(RwLock::new(Vec::new()));
-    /// let watcher = HeartbeatWatcher::new("data", "300234063909200", heartbeats);
+    /// let watcher = HeartbeatWatcher::new("data",
+    ///                                     vec!["300234063909200".to_string()],
+    ///                                     heartbeats);
     /// ```
     pub fn new<P: AsRef<Path>>(directory: P,
-                               imei: &str,
+                               imeis: Vec<String>,
                                heartbeats: Arc<RwLock<Vec<HeartbeatV1>>>)
                                -> HeartbeatWatcher {
         HeartbeatWatcher {
             directory: directory.as_ref().to_path_buf(),
-            imei: imei.to_string(),
+            imeis: imeis,
             heartbeats: heartbeats,
         }
     }
@@ -111,7 +113,7 @@ impl DirectoryWatcher for HeartbeatWatcher {
     fn refresh(&mut self) -> Result<()> {
         let storage = try!(FilesystemStorage::open(&self.directory));
         let mut messages: Vec<_> = try!(storage.iter().collect());
-        messages.retain(|m| m.imei() == self.imei);
+        messages.retain(|m| self.imeis.iter().any(|i| i == m.imei()));
         messages.sort();
         let mut heartbeats = self.heartbeats.write().unwrap();
         heartbeats.clear();

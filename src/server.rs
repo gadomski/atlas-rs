@@ -71,7 +71,7 @@ struct ServerConfig {
     port: u16,
     resource_dir: String,
     iridium_dir: String,
-    imei: String,
+    imeis: Vec<String>,
     img_url: String,
     active_camera: String,
 }
@@ -219,10 +219,10 @@ impl Server {
     /// ```
     /// # use atlas::server::Server;
     /// let server = Server::new("data/config.toml").unwrap();
-    /// let imei = server.imei();
+    /// let imeis = server.imeis();
     /// ```
-    pub fn imei(&self) -> &str {
-        &self.config.server.imei
+    pub fn imeis(&self) -> &Vec<String> {
+        &self.config.server.imeis
     }
 
     /// Returns a `PathBuf` to a resource directory.
@@ -317,7 +317,8 @@ impl Server {
 
     fn start_heartbeat_watcher(&self) {
         let heartbeats = self.heartbeats.clone();
-        let mut watcher = HeartbeatWatcher::new(self.iridium_dir(), self.imei(), heartbeats);
+        let mut watcher =
+            HeartbeatWatcher::new(self.iridium_dir(), self.imeis().clone(), heartbeats);
         thread::spawn(move || {
             watcher.refresh().unwrap();
             watcher.watch().unwrap();
@@ -611,7 +612,7 @@ mod tests {
     #[test]
     fn imei() {
         let server = Server::new("data/config.toml").unwrap();
-        assert_eq!("300234063909200", server.imei());
+        assert_eq!("300234063909200", server.imeis()[0]);
     }
 
     #[test]
