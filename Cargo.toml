@@ -24,7 +24,7 @@ toml = "0.1"
 url = "1.1"
 
 [dependencies.magick_rust]
-git = "https://github.com/gadomski/magick-rust.git"
+git = "https://github.com/nlfiedler/magick-rust.git"
 branch = "master"
 optional = true
 
