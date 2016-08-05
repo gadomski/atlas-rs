@@ -2,10 +2,13 @@
 //!
 //! E.g. watch a directory to trigger a re-read of the heartbeat messages.
 
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
+
+use chrono::UTC;
 
 use notify::{self, RecommendedWatcher, Watcher};
 
@@ -112,14 +115,26 @@ impl DirectoryWatcher for HeartbeatWatcher {
 
     fn refresh(&mut self) -> Result<()> {
         let storage = try!(FilesystemStorage::open(&self.directory));
-        let mut messages: Vec<_> = try!(storage.iter().collect());
-        messages.retain(|m| self.imeis.iter().any(|i| i == m.imei()));
-        messages.sort();
+        let mut messages: HashMap<String, Vec<_>> = HashMap::new();
+        for result in storage.iter() {
+            let message = try!(result);
+            let entry = messages.entry(message.imei().to_string()).or_insert(Vec::new());
+            entry.push(message);
+        }
         let mut heartbeats = self.heartbeats.write().unwrap();
         heartbeats.clear();
-        heartbeats.extend(try!(messages.into_heartbeats())
-            .into_iter()
-            .filter_map(|h| h.ok()));
+        for (_, mut messages) in messages {
+            messages.sort();
+            heartbeats.extend(try!(messages.into_heartbeats())
+                .into_iter()
+                .filter_map(|h| h.ok()));
+        }
+        heartbeats.sort_by_key(|h| {
+            h.messages
+                .get(0)
+                .map(|m| m.time_of_session())
+                .unwrap_or(UTC::now())
+        });
         Ok(())
     }
 }
