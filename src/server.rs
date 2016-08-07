@@ -548,7 +548,7 @@ impl Handler for StatusHandler {
         let mut response = Response::new();
 
         let mut modems = Vec::new();
-        for imei in self.imeis.iter() {
+        for (i, imei) in self.imeis.iter().enumerate() {
             let mut messages = self.storage
                 .iter()
                 .filter_map(|r| {
@@ -562,13 +562,21 @@ impl Handler for StatusHandler {
             messages.sort();
             let mut modem = BTreeMap::<String, Json>::new();
             modem.insert("imei".to_string(), imei.to_json());
+            modem.insert("id".to_string(), format!("imei_{}", imei).to_json());
             modem.insert("nmessages".to_string(), messages.len().to_json());
-            if let Some(message) = messages.iter().last() {
-                modem.insert("last_message_datetime".to_string(),
-                             message.time_of_session().to_string().to_json());
-                modem.insert("last_message_payload".to_string(),
-                             itry!(message.payload_str()).to_json());
+            if i == 0 {
+                modem.insert("active".to_string(), "active".to_json());
             }
+            let mut message_json = Vec::new();
+            for message in messages.into_iter().rev().take(100) {
+                let mut data = BTreeMap::new();
+                data.insert("datetime".to_string(),
+                            message.time_of_session().to_string().to_json());
+                data.insert("payload".to_string(),
+                            itry!(message.payload_str()).to_json());
+                message_json.push(data);
+            }
+            modem.insert("messages".to_string(), message_json.to_json());
             modems.push(modem);
         }
         data.insert("modems".to_string(), modems.to_json());
