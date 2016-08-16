@@ -3,35 +3,8 @@ name = "atlas"
 version = "0.1.0"
 authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 
-[features]
-default = ["magick_rust"]
-
 [dependencies]
 chrono = "0.2"
-docopt = "0.6"
-env_logger = "0.3"
-handlebars-iron = "0.15"
-iron = "0.3"
-log = "0.3"
-logger = "0.0.3"
-mount = "0.1"
-notify = "2.6"
+lazy_static = "0.2"
 regex = "0.1"
-router = "0.1"
-rustc-serialize = "0.3"
-sbd = "0.1"
-toml = "0.1"
-url = "1.1"
-
-[dependencies.magick_rust]
-git = "https://github.com/nlfiedler/magick-rust.git"
-branch = "master"
-optional = true
-
-[dependencies.staticfile]
-version = "0.2"
-features = ["cache"]
-
-[[bin]]
-name = "atlas"
-doc = false
+sbd = { git = "https://github.com/gadomski/sbd-rs.git" }
