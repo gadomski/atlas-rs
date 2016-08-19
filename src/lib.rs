@@ -19,8 +19,6 @@ extern crate tempdir;
 pub mod heartbeat;
 pub mod units;
 
-pub use heartbeat::Heartbeat;
-
 use std::num;
 
 /// Crate-specific errors.
