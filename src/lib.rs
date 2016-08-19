@@ -16,10 +16,12 @@ extern crate sbd;
 #[cfg(test)]
 extern crate tempdir;
 
+pub mod camera;
 pub mod heartbeat;
 pub mod units;
 
 use std::num;
+use std::path::PathBuf;
 
 /// Crate-specific errors.
 ///
@@ -28,6 +30,8 @@ use std::num;
 pub enum Error {
     /// Wrapper around `chrono::ParseError`.
     ChronoParse(chrono::ParseError),
+    /// This path cannot be used with a camera.
+    InvalidCameraPath(PathBuf),
     /// Wrapper around `notify::Error`.
     Notify(notify::Error),
     /// Wrapper around `std::num::ParseFloatError`.
