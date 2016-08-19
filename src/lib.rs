@@ -10,8 +10,11 @@
 extern crate chrono;
 #[macro_use]
 extern crate lazy_static;
+extern crate notify;
 extern crate regex;
 extern crate sbd;
+#[cfg(test)]
+extern crate tempdir;
 
 pub mod heartbeat;
 pub mod units;
@@ -27,6 +30,8 @@ use std::num;
 pub enum Error {
     /// Wrapper around `chrono::ParseError`.
     ChronoParse(chrono::ParseError),
+    /// Wrapper around `notify::Error`.
+    Notify(notify::Error),
     /// Wrapper around `std::num::ParseFloatError`.
     ParseFloat(num::ParseFloatError),
     /// Wrapper around `std::num::ParseIntError`.
@@ -58,6 +63,12 @@ impl From<num::ParseIntError> for Error {
 impl From<chrono::ParseError> for Error {
     fn from(err: chrono::ParseError) -> Error {
         Error::ChronoParse(err)
+    }
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Error {
+        Error::Notify(err)
     }
 }
 

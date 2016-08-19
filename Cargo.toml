@@ -6,5 +6,9 @@ authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 [dependencies]
 chrono = "0.2"
 lazy_static = "0.2"
+notify = "2.6"
 regex = "0.1"
 sbd = { git = "https://github.com/gadomski/sbd-rs.git" }
+
+[dev-dependencies]
+tempdir = "0.3"

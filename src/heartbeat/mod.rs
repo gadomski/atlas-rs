@@ -67,10 +67,12 @@
 
 mod builder;
 mod source;
+mod watcher;
 
 pub use sbd::mo::Message;
 pub use self::builder::{Builder, create_builder, extract_builders};
 pub use self::source::Source;
+pub use self::watcher::Watcher;
 
 use chrono::{DateTime, TimeZone, UTC};
 
